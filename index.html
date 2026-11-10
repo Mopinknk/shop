@@ -259,6 +259,8 @@ function priceFor(p,u){const sp=u&&db.specialPrices.find(s=>s.userId===u.id&&s.p
  if(sp)return{price:sp.price,kind:'special'};
  if(u&&u.role==='agent'&&p.agentPrice!=null&&p.agentPrice!=='')return{price:+p.agentPrice,kind:'agent'};
  return{price:+p.price,kind:'normal'}}
+function parseItems(text){const out=[];let cur=[];const flush=()=>{const t=cur.join('\n').trim();if(t)out.push(t);cur=[]};
+ String(text||'').split(/\r?\n/).forEach(l=>{if(/^\s*!+\s*$/.test(l))flush();else cur.push(l)});flush();return out}
 function syncStock(p){if(p.type==='stock')p.stock=(p.items||[]).filter(i=>!i.sold).length}
 function createOrder(u,p,qty,iso){iso=iso||new Date().toISOString();const pr=priceFor(p,u);const total=r2(pr.price*qty);
  let taken=[];if(p.type==='stock'){taken=(p.items||[]).filter(i=>!i.sold);if(taken.length<qty)throw new Error('สินค้าคงเหลือไม่เพียงพอ');taken=taken.slice(0,qty)}
@@ -486,7 +488,7 @@ function memberOrdersHtml(){const l=db.orders.filter(o=>o.userId===me.id&&(!ui.o
 function vOrders(){return `<section class="container page"><h1>ประวัติการสั่งซื้อ</h1><div class="card"><div class="tabs">${[['','ทั้งหมด'],['stock','สินค้าพร้อมส่ง'],['preorder','สินค้าพรีออเดอร์']].map(t=>`<button class="${ui.ordTab===t[0]?'on':''}" data-act="ordTab" data-v="${t[0]}">${t[1]}</button>`).join('')}</div>${memberOrdersHtml()}</div></section>`}
 function orderDetailHtml(o,admin){const u=userOf(o.userId),p=prodOf(o.productId);
  return `<h3>คำสั่งซื้อ ${esc(o.no)}</h3><div class="row" style="margin-bottom:8px">${typeBadge(o.type)}${stBadge(o.status)}</div>
- <table><tbody><tr><th>สินค้า</th><td>${esc(o.name)}</td></tr>${admin?`<tr><th>สมาชิก</th><td>${esc(u?u.name:'-')} (${esc(u?u.email:'-')})</td></tr>`:''}<tr><th>จำนวน</th><td>${o.qty}</td></tr><tr><th>ราคาต่อหน่วย</th><td>${money(o.unitPrice)}</td></tr><tr><th>ยอดรวม</th><td><b>${money(o.total)}</b></td></tr>${o.items&&o.items.length?`<tr><th>ข้อมูลสินค้าที่ได้รับ</th><td>${o.items.map(esc).join('<br>')}</td></tr>`:''}<tr><th>วันที่สั่งซื้อ</th><td>${fdate(o.createdAt)}</td></tr>
+ <table><tbody><tr><th>สินค้า</th><td>${esc(o.name)}</td></tr>${admin?`<tr><th>สมาชิก</th><td>${esc(u?u.name:'-')} (${esc(u?u.email:'-')})</td></tr>`:''}<tr><th>จำนวน</th><td>${o.qty}</td></tr><tr><th>ราคาต่อหน่วย</th><td>${money(o.unitPrice)}</td></tr><tr><th>ยอดรวม</th><td><b>${money(o.total)}</b></td></tr>${o.items&&o.items.length?`<tr><th>ข้อมูลสินค้าที่ได้รับ</th><td>${o.items.map(t=>`<div style="white-space:pre-wrap;word-break:break-word;padding:4px 0;border-bottom:1px dashed var(--line)">${esc(t)}</div>`).join('')}</td></tr>`:''}<tr><th>วันที่สั่งซื้อ</th><td>${fdate(o.createdAt)}</td></tr>
  ${o.type==='preorder'?`<tr><th>กำหนดสินค้าเข้า</th><td>${o.etaDate?fday(o.etaDate):(p&&p.etaDate?fday(p.etaDate):'-')}${p&&p.etaNote?' ('+esc(p.etaNote)+')':''}</td></tr>`:''}${o.refunded?'<tr><th>การคืนเงิน</th><td>คืนเงินเข้ากระเป๋าแล้ว</td></tr>':''}</tbody></table>
  <h4 style="margin-top:14px">ความคืบหน้า</h4><div class="tl">${o.history.map(h=>`<div>${stBadge(h.status)} <small class="muted">${fdate(h.at)}</small></div>`).join('')}</div>`}
 
@@ -535,7 +537,7 @@ function openProductForm(id){const p=id?prodOf(id):null;const d=p||{name:'',cate
  <label>ประเภทสินค้า<select name="type" data-change="prodTypeSwitch"><option value="stock" ${d.type==='stock'?'selected':''}>พร้อมส่ง (In Stock)</option><option value="preorder" ${d.type==='preorder'?'selected':''}>พรีออเดอร์ (Pre-Order)</option></select></label>
  <label>ราคาปกติ (บาท) *<input name="price" type="number" min="0" step="0.01" required value="${esc(d.price)}"></label>
  <label>ราคาสำหรับตัวแทน (บาท)<input name="agentPrice" type="number" min="0" step="0.01" placeholder="เว้นว่าง = ใช้ราคาปกติ" value="${d.agentPrice!=null?esc(d.agentPrice):''}"></label>
- <label id="stockBox" class="full" ${d.type==='stock'?'':'hidden'}>รายการสินค้าในสต๊อก (1 บรรทัด = 1 ชิ้น, จำนวนคงเหลือ = จำนวนบรรทัด)<textarea name="stockItems" rows="6" placeholder="พิมพ์ข้อมูลสินค้าทีละชิ้น ขึ้นบรรทัดใหม่ต่อ 1 ชิ้น เช่น รหัส / ซีเรียล / รายละเอียด">${esc((d.items||[]).filter(i=>!i.sold).map(i=>i.text).join('\n'))}</textarea></label>
+ <label id="stockBox" class="full" ${d.type==='stock'?'':'hidden'}>รายการสินค้าในสต๊อก — สต๊อก 1 ชิ้นพิมพ์ได้หลายบรรทัด แล้วคั่นชิ้นถัดไปด้วยบรรทัดที่มีแค่เครื่องหมาย !<textarea name="stockItems" rows="8" placeholder="สต๊อกชิ้นที่ 1 (พิมพ์กี่บรรทัดก็ได้)&#10;!&#10;สต๊อกชิ้นที่ 2&#10;!&#10;สต๊อกชิ้นที่ 3">${esc((d.items||[]).filter(i=>!i.sold).map(i=>i.text).join('\n!\n'))}</textarea></label>
  <label id="etaBox" ${d.type==='preorder'?'':'hidden'}>วันที่คาดว่าสินค้าเข้าร้าน<input name="etaDate" type="date" value="${esc(d.etaDate)}"></label>
  <label id="etaNoteBox" class="full" ${d.type==='preorder'?'':'hidden'}>ระยะเวลา/หมายเหตุพรีออเดอร์<input name="etaNote" maxlength="150" placeholder="เช่น ประมาณ 14-21 วันหลังปิดรับพรีออเดอร์" value="${esc(d.etaNote)}"></label>
  <label class="full">รายละเอียดสินค้า<textarea name="description" rows="4" maxlength="2000">${esc(d.description)}</textarea></label>
@@ -545,10 +547,10 @@ function openProductForm(id){const p=id?prodOf(id):null;const d=p||{name:'',cate
 function openStock(id){const p=prodOf(id);if(!p)return;const av=p.items.filter(i=>!i.sold),sold=p.items.filter(i=>i.sold);
  openModal(`<div class="row between"><h3 style="margin:0">📦 สต๊อก: ${esc(p.name)}</h3><button class="btn sm ghost" data-act="closeModal">✕</button></div>
  <p class="muted">คงเหลือ <b>${av.length}</b> ชิ้น • ขายแล้ว ${sold.length} ชิ้น</p>
- <form data-form="stockAdd" data-id="${p.id}" class="row" style="margin-bottom:10px"><input name="text" required maxlength="300" class="grow" placeholder="ข้อมูลสินค้า 1 ชิ้น (เช่น รหัส/ซีเรียล/รายละเอียด)" autocomplete="off"><button class="btn primary">➕ เพิ่มทีละชิ้น</button></form>
- <form data-form="stockBulk" data-id="${p.id}" style="margin-bottom:12px"><label>เพิ่มหลายชิ้นพร้อมกัน (1 บรรทัด = 1 ชิ้น)<textarea name="lines" rows="3"></textarea></label><button class="btn sm" style="margin-top:6px">เพิ่มทั้งหมด</button></form>
- ${p.items.length?`<div class="tw" style="max-height:40vh;overflow:auto"><table><thead><tr><th>#</th><th>ข้อมูลสินค้า</th><th>สถานะ</th><th></th></tr></thead><tbody>${p.items.map((i,n)=>{const o=i.sold?db.orders.find(x=>x.id===i.orderId):null;return `<tr><td>${n+1}</td><td>${esc(i.text)}</td><td>${i.sold?badge('ขายแล้ว','gray')+(o?` <small class="muted">${esc(o.no)}</small>`:''):badge('พร้อมส่ง','ok')}</td><td>${i.sold?'':`<button class="btn sm danger" data-act="stockDel" data-id="${p.id}" data-i="${i.id}">ลบ</button>`}</td></tr>`}).join('')}</tbody></table></div>`:empty('ยังไม่มีสินค้าในสต๊อก')}`,true);
- setTimeout(()=>{const i=$('form[data-form=stockAdd] input');if(i)i.focus()},0)}
+ <form data-form="stockAdd" data-id="${p.id}" style="margin-bottom:12px"><label>เพิ่มสต๊อก — 1 ชิ้นพิมพ์ได้หลายบรรทัด ถ้าจะเพิ่มชิ้นถัดไปให้คั่นด้วยบรรทัดที่มีแค่ <b>!</b><textarea name="text" rows="6" maxlength="20000" required placeholder="สต๊อกชิ้นที่ 1 (พิมพ์กี่บรรทัดก็ได้)&#10;!&#10;สต๊อกชิ้นที่ 2"></textarea></label><button class="btn primary" style="margin-top:8px">➕ เพิ่มเข้าสต๊อก</button></form>
+
+ ${p.items.length?`<div class="tw" style="max-height:40vh;overflow:auto"><table><thead><tr><th>#</th><th>ข้อมูลสินค้า</th><th>สถานะ</th><th></th></tr></thead><tbody>${p.items.map((i,n)=>{const o=i.sold?db.orders.find(x=>x.id===i.orderId):null;return `<tr><td>${n+1}</td><td style="white-space:pre-wrap;word-break:break-word">${esc(i.text)}</td><td>${i.sold?badge('ขายแล้ว','gray')+(o?` <small class="muted">${esc(o.no)}</small>`:''):badge('พร้อมส่ง','ok')}</td><td>${i.sold?'':`<button class="btn sm danger" data-act="stockDel" data-id="${p.id}" data-i="${i.id}">ลบ</button>`}</td></tr>`}).join('')}</tbody></table></div>`:empty('ยังไม่มีสินค้าในสต๊อก')}`,true);
+ setTimeout(()=>{const i=$('form[data-form=stockAdd] textarea');if(i)i.focus()},0)}
 /* ---- Categories ---- */
 function aCategories(){const l=[...db.categories].sort(byOrder);
  return `<div class="card"><div class="row between" style="margin-bottom:12px"><span class="muted">ปิดการแสดงผลหมวดหมู่ = ซ่อนหมวดหมู่และสินค้าในหมวดนั้นบนหน้าร้าน</span><button class="btn primary" data-act="catNew">➕ เพิ่มหมวดหมู่</button></div>${l.length?`<div class="tw"><table><thead><tr><th>ลำดับ</th><th></th><th>ชื่อหมวดหมู่</th><th class="num">จำนวนสินค้า</th><th>แสดงผล</th><th></th></tr></thead><tbody>${l.map(c=>`<tr><td><div class="row" style="gap:2px;flex-wrap:nowrap"><button class="btn sm ghost" data-act="catMove" data-id="${c.id}" data-d="-1">▲</button><button class="btn sm ghost" data-act="catMove" data-id="${c.id}" data-d="1">▼</button></div></td><td><img class="thumb" src="${imgOf(c)}" alt=""></td><td><b>${esc(c.name)}</b></td><td class="num">${db.products.filter(p=>p.categoryId===c.id).length}</td><td>${sw('catToggle',c.id,c.active)}</td><td><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-act="catEdit" data-id="${c.id}">แก้ไข</button><button class="btn sm danger" data-act="catDelete" data-id="${c.id}">ลบ</button></div></td></tr>`).join('')}</tbody></table></div>`:empty('ยังไม่มีหมวดหมู่')}</div>`}
@@ -776,8 +778,7 @@ async function testApi(){const f=$('#apiform');if(!f)return;const url=f.url.valu
 
 /* ---------- Form handlers ---------- */
 const forms={
- stockAdd(f){const id=f.dataset.id,t=f.text.value.trim();if(!t)return;if(commit(()=>{const p=prodOf(id);p.items.push({id:uid(),text:t,sold:false,orderId:''});syncStock(p)}))toast('เพิ่มสินค้าในสต๊อกแล้ว','ok');render();openStock(id)},
- stockBulk(f){const id=f.dataset.id,l=f.lines.value.split('\n').map(s=>s.trim()).filter(Boolean);if(!l.length)return toast('กรุณากรอกอย่างน้อย 1 บรรทัด','err');if(commit(()=>{const p=prodOf(id);l.forEach(t=>p.items.push({id:uid(),text:t,sold:false,orderId:''}));syncStock(p)}))toast('เพิ่ม '+l.length+' ชิ้นแล้ว','ok');render();openStock(id)},
+ stockAdd(f){const id=f.dataset.id,l=parseItems(f.text.value);if(!l.length)return toast('กรุณากรอกข้อมูลสินค้า','err');if(commit(()=>{const p=prodOf(id);l.forEach(t=>p.items.push({id:uid(),text:t,sold:false,orderId:''}));syncStock(p)}))toast('เพิ่มสต๊อก '+l.length+' ชิ้นแล้ว','ok');render();openStock(id)},
  hsearch(f){ui.shop.q=f.q.value.trim();ui.shop.cat='';ui.shop.type='';f.reset();nav('products')},
  login(f){const email=f.email.value.trim().toLowerCase(),pw=f.password.value;const u=db.users.find(x=>x.email.toLowerCase()===email&&x.pass===pwHash(pw));
   if(!u)return toast('อีเมลหรือรหัสผ่านไม่ถูกต้อง','err');if(u.status!=='active')return toast('บัญชีนี้ถูกระงับการใช้งาน','err');
@@ -803,7 +804,7 @@ const forms={
   render()},
  product(f){const id=f.dataset.id,name=f.name.value.trim(),type=f.type.value,price=parseFloat(f.price.value);if(!name)return toast('กรุณากรอกชื่อสินค้า','err');if(!(price>=0))return toast('ราคาไม่ถูกต้อง','err');
   const ap=f.agentPrice.value.trim()===''?null:parseFloat(f.agentPrice.value);if(ap!==null&&!(ap>=0))return toast('ราคาตัวแทนไม่ถูกต้อง','err');
-  const lines=type==='stock'?f.stockItems.value.split('\n').map(s=>s.trim()).filter(Boolean):null;
+  const lines=type==='stock'?parseItems(f.stockItems.value):null;
   const data={name,categoryId:f.categoryId.value,type,price,agentPrice:ap,stock:0,etaDate:type==='preorder'?f.etaDate.value:'',etaNote:type==='preorder'?f.etaNote.value.trim():'',description:f.description.value.trim(),image:imgState.prod||'',active:f.active.checked};
   if(commit(()=>{let p;if(id){p=prodOf(id);Object.assign(p,data)}else{data.id=uid();data.items=[];data.createdAt=new Date().toISOString();data.order=db.products.reduce((m,x)=>Math.max(m,x.order||0),-1)+1;db.products.push(data);p=data}
   if(lines){const sold=p.items.filter(i=>i.sold),pool=p.items.filter(i=>!i.sold),next=[];for(const t of lines){const k=pool.findIndex(i=>i.text===t);if(k>=0)next.push(pool.splice(k,1)[0]);else next.push({id:uid(),text:t,sold:false,orderId:''})}p.items=[...sold,...next]}else if(!Array.isArray(p.items))p.items=[];
@@ -827,7 +828,7 @@ const forms={
  api(f){const url=f.url.value.trim();if(url&&!/^https?:\/\//i.test(url))return toast('API URL ต้องขึ้นต้นด้วย http:// หรือ https://','err');
   if(commit(()=>{db.api={...db.api,enabled:f.enabled.checked,url,key:f.key.value.trim(),secret:f.secret.value.trim(),status:'none',statusAt:null,statusMsg:'บันทึกแล้ว ยังไม่ได้ทดสอบการเชื่อมต่อ'}})){toast('บันทึกการตั้งค่า API แล้ว','ok');render()}}
 };
-const ADMIN_FORMS=new Set(['stockAdd','stockBulk','product','category','banner','member','special','bank','api']);
+const ADMIN_FORMS=new Set(['stockAdd','product','category','banner','member','special','bank','api']);
 document.addEventListener('submit',async e=>{const f=e.target.closest('form[data-form]');if(!f)return;e.preventDefault();const h=forms[f.dataset.form];if(!h)return;
  if(ADMIN_FORMS.has(f.dataset.form)&&!isAdmin())return toast('ไม่มีสิทธิ์ใช้งานส่วนนี้','err');
  try{await h(f)}catch(err){console.error(err);toast('เกิดข้อผิดพลาด: '+(err.message||err),'err')}});
