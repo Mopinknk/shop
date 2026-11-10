@@ -261,6 +261,14 @@ function priceFor(p,u){const sp=u&&db.specialPrices.find(s=>s.userId===u.id&&s.p
  return{price:+p.price,kind:'normal'}}
 function parseItems(text){const out=[];let cur=[];const flush=()=>{const t=cur.join('\n').trim();if(t)out.push(t);cur=[]};
  String(text||'').split(/\r?\n/).forEach(l=>{if(/^\s*!+\s*$/.test(l))flush();else cur.push(l)});flush();return out}
+function stockPreview(ta){const f=ta.closest('form');const box=f&&f.querySelector('.spv');if(!box)return;
+ const l=parseItems(ta.value);
+ if(!l.length){box.innerHTML='<span class="muted">ผลลัพธ์: ยังไม่มีรายการ</span>';return}
+ const multi=l.filter(t=>t.split('\n').length>1).length;
+ box.innerHTML=`<div style="font-weight:600;margin-bottom:6px">ผลลัพธ์: จะเพิ่มเป็น <span style="color:var(--primary)">${l.length}</span> ชิ้น</div>`
+ +(l.length===1&&ta.value.trim().split(/\r?\n/).length>1?`<div style="color:var(--warn);font-size:.88em;margin-bottom:6px">⚠ มีหลายบรรทัดแต่ถูกนับเป็น 1 ชิ้น — ถ้าต้องการหลายชิ้น อย่าลืมคั่นด้วยบรรทัดที่มีแค่ !</div>`:'')
+ +`<div style="max-height:160px;overflow:auto;display:flex;flex-direction:column;gap:6px">`+l.map((t,n)=>{const ln=t.split('\n');const warn=ln.length>1;
+ return `<div style="border:1px solid ${warn?'var(--warn)':'var(--line)'};border-radius:8px;padding:6px 10px;background:var(--surface);font-size:.9em"><b>ชิ้นที่ ${n+1}</b>${warn?` <small style="color:var(--warn)">(${ln.length} บรรทัด)</small>`:''}<div style="white-space:pre-wrap;word-break:break-word;max-height:4.6em;overflow:hidden">${esc(t)}</div></div>`}).join('')+`</div>`}
 function syncStock(p){if(p.type==='stock')p.stock=(p.items||[]).filter(i=>!i.sold).length}
 function createOrder(u,p,qty,iso){iso=iso||new Date().toISOString();const pr=priceFor(p,u);const total=r2(pr.price*qty);
  let taken=[];if(p.type==='stock'){taken=(p.items||[]).filter(i=>!i.sold);if(taken.length<qty)throw new Error('สินค้าคงเหลือไม่เพียงพอ');taken=taken.slice(0,qty)}
@@ -345,7 +353,7 @@ function applyTheme(s,el){el=el||document.documentElement;const st=el.style;
 
 /* ---------- UI helpers ---------- */
 function toast(msg,type){const t=document.createElement('div');t.className='toast '+(type||'');t.textContent=msg;$('#toasts').appendChild(t);setTimeout(()=>t.remove(),type==='err'?4500:3000)}
-function openModal(html,wide){$('#modalRoot').innerHTML=`<div class="overlay" data-act="overlay"><div class="modal ${wide?'wide':''}" role="dialog" aria-modal="true">${html}</div></div>`;document.body.classList.add('noscroll')}
+function openModal(html,wide){$('#modalRoot').innerHTML=`<div class="overlay" data-act="overlay"><div class="modal ${wide?'wide':''}" role="dialog" aria-modal="true">${html}</div></div>`;document.body.classList.add('noscroll');$('#modalRoot').querySelectorAll('textarea[data-spv]').forEach(stockPreview)}
 function closeModal(){$('#modalRoot').innerHTML='';document.body.classList.remove('noscroll');for(const k of Object.keys(imgHooks))delete imgHooks[k]}
 function confirmBox(msg,okText,danger){return new Promise(res=>{const d=document.createElement('div');d.className='overlay top';
  d.innerHTML=`<div class="modal sm"><p>${esc(msg)}</p><div class="row end" style="margin-top:14px"><button class="btn" data-c="0">ยกเลิก</button><button class="btn ${danger?'danger':'primary'}" data-c="1">${esc(okText||'ยืนยัน')}</button></div></div>`;
@@ -537,7 +545,7 @@ function openProductForm(id){const p=id?prodOf(id):null;const d=p||{name:'',cate
  <label>ประเภทสินค้า<select name="type" data-change="prodTypeSwitch"><option value="stock" ${d.type==='stock'?'selected':''}>พร้อมส่ง (In Stock)</option><option value="preorder" ${d.type==='preorder'?'selected':''}>พรีออเดอร์ (Pre-Order)</option></select></label>
  <label>ราคาปกติ (บาท) *<input name="price" type="number" min="0" step="0.01" required value="${esc(d.price)}"></label>
  <label>ราคาสำหรับตัวแทน (บาท)<input name="agentPrice" type="number" min="0" step="0.01" placeholder="เว้นว่าง = ใช้ราคาปกติ" value="${d.agentPrice!=null?esc(d.agentPrice):''}"></label>
- <label id="stockBox" class="full" ${d.type==='stock'?'':'hidden'}>รายการสินค้าในสต๊อก — สต๊อก 1 ชิ้นพิมพ์ได้หลายบรรทัด แล้วคั่นชิ้นถัดไปด้วยบรรทัดที่มีแค่เครื่องหมาย !<textarea name="stockItems" rows="8" placeholder="สต๊อกชิ้นที่ 1 (พิมพ์กี่บรรทัดก็ได้)&#10;!&#10;สต๊อกชิ้นที่ 2&#10;!&#10;สต๊อกชิ้นที่ 3">${esc((d.items||[]).filter(i=>!i.sold).map(i=>i.text).join('\n!\n'))}</textarea></label>
+ <label id="stockBox" class="full" ${d.type==='stock'?'':'hidden'}>รายการสินค้าในสต๊อก — สต๊อก 1 ชิ้นพิมพ์ได้หลายบรรทัด แล้วคั่นชิ้นถัดไปด้วยบรรทัดที่มีแค่เครื่องหมาย !<textarea name="stockItems" data-spv rows="8" placeholder="สต๊อกชิ้นที่ 1 (พิมพ์กี่บรรทัดก็ได้)&#10;!&#10;สต๊อกชิ้นที่ 2&#10;!&#10;สต๊อกชิ้นที่ 3">${esc((d.items||[]).filter(i=>!i.sold).map(i=>i.text).join('\n!\n'))}</textarea><div class="spv" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--soft)"></div></label>
  <label id="etaBox" ${d.type==='preorder'?'':'hidden'}>วันที่คาดว่าสินค้าเข้าร้าน<input name="etaDate" type="date" value="${esc(d.etaDate)}"></label>
  <label id="etaNoteBox" class="full" ${d.type==='preorder'?'':'hidden'}>ระยะเวลา/หมายเหตุพรีออเดอร์<input name="etaNote" maxlength="150" placeholder="เช่น ประมาณ 14-21 วันหลังปิดรับพรีออเดอร์" value="${esc(d.etaNote)}"></label>
  <label class="full">รายละเอียดสินค้า<textarea name="description" rows="4" maxlength="2000">${esc(d.description)}</textarea></label>
@@ -547,7 +555,7 @@ function openProductForm(id){const p=id?prodOf(id):null;const d=p||{name:'',cate
 function openStock(id){const p=prodOf(id);if(!p)return;const av=p.items.filter(i=>!i.sold),sold=p.items.filter(i=>i.sold);
  openModal(`<div class="row between"><h3 style="margin:0">📦 สต๊อก: ${esc(p.name)}</h3><button class="btn sm ghost" data-act="closeModal">✕</button></div>
  <p class="muted">คงเหลือ <b>${av.length}</b> ชิ้น • ขายแล้ว ${sold.length} ชิ้น</p>
- <form data-form="stockAdd" data-id="${p.id}" style="margin-bottom:12px"><label>เพิ่มสต๊อก — 1 ชิ้นพิมพ์ได้หลายบรรทัด ถ้าจะเพิ่มชิ้นถัดไปให้คั่นด้วยบรรทัดที่มีแค่ <b>!</b><textarea name="text" rows="6" maxlength="20000" required placeholder="สต๊อกชิ้นที่ 1 (พิมพ์กี่บรรทัดก็ได้)&#10;!&#10;สต๊อกชิ้นที่ 2"></textarea></label><button class="btn primary" style="margin-top:8px">➕ เพิ่มเข้าสต๊อก</button></form>
+ <form data-form="stockAdd" data-id="${p.id}" style="margin-bottom:12px"><label>เพิ่มสต๊อก — 1 ชิ้นพิมพ์ได้หลายบรรทัด ถ้าจะเพิ่มชิ้นถัดไปให้คั่นด้วยบรรทัดที่มีแค่ <b>!</b><textarea name="text" rows="6" maxlength="20000" data-spv required placeholder="สต๊อกชิ้นที่ 1 (พิมพ์กี่บรรทัดก็ได้)&#10;!&#10;สต๊อกชิ้นที่ 2"></textarea></label><div class="spv" style="margin-top:8px;padding:10px;border-radius:10px;background:var(--soft)"><span class="muted">ผลลัพธ์: ยังไม่มีรายการ</span></div><button class="btn primary" style="margin-top:8px">➕ เพิ่มเข้าสต๊อก</button></form>
 
  ${p.items.length?`<div class="tw" style="max-height:40vh;overflow:auto"><table><thead><tr><th>#</th><th>ข้อมูลสินค้า</th><th>สถานะ</th><th></th></tr></thead><tbody>${p.items.map((i,n)=>{const o=i.sold?db.orders.find(x=>x.id===i.orderId):null;return `<tr><td>${n+1}</td><td style="white-space:pre-wrap;word-break:break-word">${esc(i.text)}</td><td>${i.sold?badge('ขายแล้ว','gray')+(o?` <small class="muted">${esc(o.no)}</small>`:''):badge('พร้อมส่ง','ok')}</td><td>${i.sold?'':`<button class="btn sm danger" data-act="stockDel" data-id="${p.id}" data-i="${i.id}">ลบ</button>`}</td></tr>`}).join('')}</tbody></table></div>`:empty('ยังไม่มีสินค้าในสต๊อก')}`,true);
  setTimeout(()=>{const i=$('form[data-form=stockAdd] textarea');if(i)i.focus()},0)}
@@ -661,7 +669,7 @@ const LISTS={shopList:shopListHtml,prodList:prodRows,ordList:ordRows,memList:mem
 function setPath(path,val){const p=path.split('.');let o=ui;for(let i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=val}
 function onBind(el){if(el.dataset.bind){setPath(el.dataset.bind,el.value);const t=$('#'+el.dataset.list);if(t&&LISTS[el.dataset.list])t.innerHTML=LISTS[el.dataset.list]()}}
 function onDraft(el){if(!ui.draft)return;const k=el.dataset.draft;ui.draft[k]=(k==='fontSize'||k==='headWeight')?+el.value:el.value;updatePreview()}
-document.addEventListener('input',e=>{const el=e.target;if(el.dataset.bind)onBind(el);else if(el.dataset.draft)onDraft(el)});
+document.addEventListener('input',e=>{const el=e.target;if(el.dataset.spv!==undefined)stockPreview(el);if(el.dataset.bind)onBind(el);else if(el.dataset.draft)onDraft(el)});
 
 /* ---------- Action handlers ---------- */
 const A=fn=>{fn.admin=true;return fn};
