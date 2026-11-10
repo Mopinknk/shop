@@ -225,7 +225,7 @@ const BANKS=['กสิกรไทย (KBANK)','ไทยพาณิชย์ 
 const LEVELS=['ทั่วไป','Silver','Gold','VIP'];
 const ROLES={admin:'ผู้ดูแลระบบ',member:'สมาชิก',agent:'ตัวแทนจำหน่าย'};
 const ST={pending:['รอดำเนินการ','warn'],processing:['กำลังเตรียมสินค้า','info'],po_wait:['รอสินค้าเข้า','warn'],po_arrived:['สินค้าเข้าแล้ว','info'],shipped:['จัดส่งแล้ว','info'],done:['สำเร็จ','ok'],cancelled:['ยกเลิก','err']};
-const FLOW={stock:['pending','processing','shipped','done','cancelled'],preorder:['po_wait','po_arrived','shipped','done','cancelled']};
+const FLOW={stock:['done','cancelled'],preorder:['po_wait','po_arrived','shipped','done','cancelled']};
 const TOPST={pending:['รอตรวจสอบ','warn'],approved:['อนุมัติแล้ว','ok'],rejected:['ปฏิเสธ','err']};
 const TXT={topup:'เติมเงิน',purchase:'ซื้อสินค้า',refund:'คืนเงิน',adjust:'ปรับยอดโดยแอดมิน'};
 const badge=(t,c)=>`<span class="badge ${c||''}">${esc(t)}</span>`;
@@ -245,7 +245,7 @@ function ph(name){let h=0;for(const ch of String(name||'x'))h=(h*31+ch.charCodeA
 const imgOf=o=>(o&&o.image)||ph(o&&o.name);
 
 /* ---------- Persistence ---------- */
-function migrate(d){(d.products||[]).forEach(p=>{if(!Array.isArray(p.items)){p.items=[];if(p.type==='stock')for(let i=1;i<=(+p.stock||0);i++)p.items.push({id:uid(),text:p.name+' #'+String(i).padStart(3,'0'),sold:false,orderId:''})}});return d}
+function migrate(d){(d.orders||[]).forEach(o=>{if(o.type==='stock'&&o.status!=='done'&&o.status!=='cancelled'){o.status='done';(o.history=o.history||[]).push({status:'done',at:new Date().toISOString()})}});(d.products||[]).forEach(p=>{if(!Array.isArray(p.items)){p.items=[];if(p.type==='stock')for(let i=1;i<=(+p.stock||0);i++)p.items.push({id:uid(),text:p.name+' #'+String(i).padStart(3,'0'),sold:false,orderId:''})}});return d}
 function load(){try{const raw=localStorage.getItem(LS);if(raw){const d=JSON.parse(raw);if(d&&d.v===1)return migrate(d)}}catch(e){}
  const d=seed();try{localStorage.setItem(LS,JSON.stringify(d))}catch(e){}return d}
 function save(){try{localStorage.setItem(LS,JSON.stringify(db));return true}catch(e){toast('บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์เต็ม ลองลบรูปที่ไม่ใช้ออก','err');return false}}
@@ -272,7 +272,7 @@ function stockPreview(ta){const f=ta.closest('form');const box=f&&f.querySelecto
 function syncStock(p){if(p.type==='stock')p.stock=(p.items||[]).filter(i=>!i.sold).length}
 function createOrder(u,p,qty,iso){iso=iso||new Date().toISOString();const pr=priceFor(p,u);const total=r2(pr.price*qty);
  let taken=[];if(p.type==='stock'){taken=(p.items||[]).filter(i=>!i.sold);if(taken.length<qty)throw new Error('สินค้าคงเหลือไม่เพียงพอ');taken=taken.slice(0,qty)}
- const o={id:uid(),no:nextNo('ORD','order',iso),userId:u.id,productId:p.id,name:p.name,type:p.type,qty,unitPrice:pr.price,total,status:p.type==='stock'?'pending':'po_wait',etaDate:p.etaDate||'',createdAt:iso,history:[],refunded:false,items:taken.map(i=>i.text)};taken.forEach(i=>{i.sold=true;i.orderId=o.id});syncStock(p);
+ const o={id:uid(),no:nextNo('ORD','order',iso),userId:u.id,productId:p.id,name:p.name,type:p.type,qty,unitPrice:pr.price,total,status:p.type==='stock'?'done':'po_wait',etaDate:p.etaDate||'',createdAt:iso,history:[],refunded:false,items:taken.map(i=>i.text)};taken.forEach(i=>{i.sold=true;i.orderId=o.id});syncStock(p);
  o.history.push({status:o.status,at:iso});addTx(u,'purchase',-total,o.no,p.name+' x'+qty,iso);db.orders.push(o);return o}
 function newTopup(u,amount,bank,slip,hash,iso){const t={id:uid(),no:nextNo('TOP','topup',iso),userId:u.id,amount:r2(amount),bankId:bank?bank.id:'',bankLabel:bank?bank.bankName+' '+bank.accNo:'',slip:slip||'',slipHash:hash||'',status:'pending',note:'',apiMsg:'',method:'',createdAt:iso,reviewedAt:null,reviewedBy:''};db.topups.push(t);return t}
 function approveTopup(id,by){const t=db.topups.find(x=>x.id===id);if(!t)throw new Error('ไม่พบรายการเติมเงิน');
@@ -329,7 +329,7 @@ function seed(){
     const pr=priceFor(p,u);if(u.balance<pr.price*qty)continue;
     const o=createOrder(u,p,qty,iso(d));
     const steps=o.type==='stock'?['pending','processing','shipped','done']:['po_wait','po_arrived','shipped','done'];
-    const target=d>8?3:d>4?2:d>2?1:0;const lim=o.type==='preorder'?Math.min(target,d>20?3:0):target;
+    const target=d>8?3:d>4?2:d>2?1:0;const lim=o.type==='stock'?0:Math.min(target,d>20?3:0);
     for(let i=1;i<=lim;i++){o.status=steps[i];o.history.push({status:steps[i],at:iso(Math.max(d-i,0))})}}}
   }
  {const p4=S.products.find(p=>p.id==='p4');p4.items=[...p4.items.filter(i=>i.sold),...p4.items.filter(i=>!i.sold).slice(0,3)];syncStock(p4)}
@@ -763,7 +763,7 @@ function purchase(){if(purchasing)return;purchasing=true;try{const u=curUser();i
  let order=null;const ok=commit(()=>{const uu=userOf(u.id),p=prodOf(b.pid);if(!p||!p.active)throw new Error('สินค้านี้ไม่พร้อมจำหน่าย');if(!Number.isInteger(b.qty)||b.qty<1)throw new Error('จำนวนไม่ถูกต้อง');
   const pr=priceFor(p,uu);if(uu.balance<r2(pr.price*b.qty))throw new Error('ยอดเงินในกระเป๋าไม่เพียงพอ กรุณาเติมเงิน');
   order=createOrder(uu,p,b.qty);notify('order',`คำสั่งซื้อใหม่ ${order.no}: ${p.name} ×${b.qty} จาก ${uu.name}`,'admin');notify('payment',`ชำระเงิน ${money(order.total)} สำหรับ ${order.no} สำเร็จ`,uu.id);notify('payment',`ได้รับชำระ ${money(order.total)} จาก ${uu.name} (${order.no})`,'admin')});
- if(ok){closeModal();ui.buy=null;toast(`สั่งซื้อสำเร็จ เลขที่ ${order.no}`,'ok');nav('orders')}else{buyModal()}}finally{purchasing=false}}
+ if(ok){closeModal();ui.buy=null;toast(`สั่งซื้อสำเร็จ เลขที่ ${order.no}`,'ok');if(order.type==='stock'){render();openModal(`<div class="card" style="background:var(--soft);margin-bottom:12px"><b style="color:var(--ok)">✅ ชำระเงินสำเร็จ — ได้รับสินค้าเรียบร้อยแล้ว</b></div>`+orderDetailHtml(order,false)+`<div class="row end" style="margin-top:14px"><button class="btn" data-act="closeModal">ปิด</button><a class="btn primary" href="#/orders">ไปที่คำสั่งซื้อของฉัน</a></div>`)}else nav('orders')}else{buyModal()}}finally{purchasing=false}}
 
 /* ---------- Slip verification (API) ---------- */
 async function verifySlip(t){const c=db.api;if(!c.enabled||!c.url)return{state:'manual',msg:'รอผู้ดูแลตรวจสอบสลิป'};
