@@ -227,7 +227,7 @@ const ROLES={admin:'ผู้ดูแลระบบ',member:'สมาชิ�
 const ST={pending:['รอดำเนินการ','warn'],processing:['กำลังเตรียมสินค้า','info'],po_wait:['รอสินค้าเข้า','warn'],po_arrived:['สินค้าเข้าแล้ว','info'],shipped:['จัดส่งแล้ว','info'],done:['สำเร็จ','ok'],cancelled:['ยกเลิก','err']};
 const FLOW={stock:['pending','processing','shipped','done','cancelled'],preorder:['po_wait','po_arrived','shipped','done','cancelled']};
 const TOPST={pending:['รอตรวจสอบ','warn'],approved:['อนุมัติแล้ว','ok'],rejected:['ปฏิเสธ','err']};
-const TXT={topup:'เติมเงิน',purchase:'ซื้อสินค้า',refund:'คืนเงิน'};
+const TXT={topup:'เติมเงิน',purchase:'ซื้อสินค้า',refund:'คืนเงิน',adjust:'ปรับยอดโดยแอดมิน'};
 const badge=(t,c)=>`<span class="badge ${c||''}">${esc(t)}</span>`;
 const stBadge=s=>badge(ST[s][0],ST[s][1]);
 const typeBadge=t=>t==='preorder'?badge('พรีออเดอร์','pre'):badge('พร้อมส่ง','ok');
@@ -580,7 +580,7 @@ function aMembers(){const f=ui.a;return `<div class="card"><div class="toolbar">
 function openMemberForm(id){const u=id?userOf(id):null;const d=u||{name:'',email:'',phone:'',role:'member',level:'ทั่วไป',status:'active'};
  openModal(`<h3>${u?'แก้ไขสมาชิก':'เพิ่มสมาชิกใหม่'}</h3><form data-form="member" data-id="${u?u.id:''}" class="fgrid"><label class="full">ชื่อ-นามสกุล *<input name="name" required maxlength="80" value="${esc(d.name)}"></label><label>อีเมล *<input name="email" type="email" required value="${esc(d.email)}"></label><label>เบอร์โทรศัพท์<input name="phone" maxlength="20" value="${esc(d.phone)}"></label>
  <label>ประเภทบัญชี<select name="role">${Object.keys(ROLES).map(r=>`<option value="${r}" ${d.role===r?'selected':''}>${ROLES[r]}</option>`).join('')}</select></label><label>ระดับสมาชิก<select name="level">${LEVELS.map(l=>`<option ${d.level===l?'selected':''}>${l}</option>`).join('')}</select></label>
- <label>สถานะบัญชี<select name="status"><option value="active" ${d.status==='active'?'selected':''}>ใช้งาน</option><option value="suspended" ${d.status==='suspended'?'selected':''}>ระงับ</option></select></label><label>${u?'รหัสผ่านใหม่ (เว้นว่าง = ไม่เปลี่ยน)':'รหัสผ่าน (6 ตัวอักษรขึ้นไป) *'}<input name="password" type="password" minlength="6" ${u?'':'required'} autocomplete="new-password"></label>
+ <label>สถานะบัญชี<select name="status"><option value="active" ${d.status==='active'?'selected':''}>ใช้งาน</option><option value="suspended" ${d.status==='suspended'?'selected':''}>ระงับ</option></select></label><label>${u?'รหัสผ่านใหม่ (เว้นว่าง = ไม่เปลี่ยน)':'รหัสผ่าน (6 ตัวอักษรขึ้นไป) *'}<input name="password" type="password" minlength="6" ${u?'':'required'} autocomplete="new-password"></label>${u?`<label class="full">ยอดเงินคงเหลือ (฿) — แก้ไขได้ ระบบจะบันทึกส่วนต่างเป็นรายการ "ปรับยอดโดยแอดมิน"<input name="balance" type="number" step="0.01" min="0" required value="${u.balance}"></label>`:''}
  <div class="row end full"><button type="button" class="btn" data-act="closeModal">ยกเลิก</button><button class="btn primary">บันทึก</button></div></form>`)}
 function openMemberView(id){const u=userOf(id);if(!u)return;
  const ords=db.orders.filter(o=>o.userId===id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)),tops=db.topups.filter(t=>t.userId===id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)),sps=db.specialPrices.filter(s=>s.userId===id);
@@ -831,7 +831,7 @@ const forms={
   if(commit(()=>{if(id){const u=userOf(id);const admins=db.users.filter(x=>x.role==='admin'&&x.status==='active'&&x.id!==id);
     if(u.role==='admin'&&(data.role!=='admin'||data.status!=='active')&&!admins.length)throw new Error('ต้องมีผู้ดูแลระบบที่ใช้งานได้อย่างน้อย 1 บัญชี');
     if(id===me.id&&(data.role!=='admin'||data.status!=='active'))throw new Error('ไม่สามารถลดสิทธิ์หรือระงับบัญชีของตัวเองได้');
-    Object.assign(u,data);if(pw)u.pass=pwHash(pw)}else{if(!pw)throw new Error('กรุณากรอกรหัสผ่าน');db.users.push({id:uid(),...data,pass:pwHash(pw),balance:0,createdAt:new Date().toISOString()})}})){closeModal();toast('บันทึกข้อมูลสมาชิกแล้ว','ok');render()}},
+    Object.assign(u,data);if(pw)u.pass=pwHash(pw);if(f.balance){const nb=r2(parseFloat(f.balance.value));if(!Number.isFinite(nb)||nb<0)throw new Error('ยอดเงินไม่ถูกต้อง');const diff=r2(nb-u.balance);if(diff!==0)addTx(u,'adjust',diff,'','ปรับยอดโดยแอดมิน')}}else{if(!pw)throw new Error('กรุณากรอกรหัสผ่าน');db.users.push({id:uid(),...data,pass:pwHash(pw),balance:0,createdAt:new Date().toISOString()})}})){closeModal();toast('บันทึกข้อมูลสมาชิกแล้ว','ok');render()}},
  special(f){const uid2=f.dataset.id,pid=f.productId.value,price=parseFloat(f.price.value);if(!pid||!(price>=0))return toast('กรุณาเลือกสินค้าและกรอกราคาให้ถูกต้อง','err');
   if(commit(()=>{const ex=db.specialPrices.find(s=>s.userId===uid2&&s.productId===pid);if(ex)ex.price=price;else db.specialPrices.push({id:uid(),userId:uid2,productId:pid,price})}))toast('บันทึกราคาพิเศษแล้ว','ok');openMemberView(uid2)},
  bank(f){const id=f.dataset.id;const data={bankName:f.bankName.value,accName:f.accName.value.trim(),accNo:f.accNo.value.trim(),active:f.active.checked,showOnStore:f.showOnStore.checked};if(!data.accName||!data.accNo)return toast('กรุณากรอกข้อมูลบัญชีให้ครบ','err');
