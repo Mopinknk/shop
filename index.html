@@ -121,6 +121,20 @@ td.num,th.num{text-align:right}
 .ccard{position:relative;border-radius:var(--radius);overflow:hidden;aspect-ratio:4/3;background:var(--soft);cursor:pointer;display:block;border:1px solid var(--line)}
 .ccard img{width:100%;height:100%;object-fit:cover}
 .ccard div{position:absolute;left:0;right:0;bottom:0;padding:12px 14px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.7))}
+.crumb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:.88em;margin:0 0 18px}.crumb a{color:var(--muted)}.crumb a:hover{color:var(--primary)}.crumb b{color:var(--text);font-weight:600}
+.klabel{color:var(--primary);font-weight:600;font-size:.95em;margin:0}
+.cgrid2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:12px}
+.cat2{display:block;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 10px 14px;transition:.15s}.cat2:hover{box-shadow:0 8px 22px rgba(0,0,0,.09)}
+.cat2 img,.cbanner img{width:100%;aspect-ratio:16/5;object-fit:cover;border-radius:calc(var(--radius) - 4px);display:block;background:var(--soft)}
+.cat2 .row{margin-top:12px;padding:0 4px;flex-wrap:nowrap;justify-content:space-between;align-items:center}
+.cbanner img{aspect-ratio:4/1;border-radius:var(--radius)}
+.pgrid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-top:12px}
+.pc2{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:8px 8px 12px;display:flex;flex-direction:column;gap:6px}
+.pc2 img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:calc(var(--radius) - 4px);background:var(--soft)}
+.pc2 h4{margin:4px 2px 0;font-size:.95em;font-weight:500}.pc2 .pp{margin:0 2px;color:var(--primary);font-weight:600;font-size:.88em}.pc2 .stk2{text-align:center;font-size:.8em;color:var(--muted)}
+.zoom{position:absolute;right:10px;bottom:10px;border:0;border-radius:8px;padding:6px 10px;background:rgba(0,0,0,.55);color:#fff;font-size:.82em;cursor:pointer}
+.pdetail .big img{object-fit:contain;background:#fff}
+@media(max-width:700px){.cgrid2{grid-template-columns:1fr}}
 .pdetail{display:grid;grid-template-columns:1fr 1fr;gap:28px}
 @media(max-width:760px){.pdetail{grid-template-columns:1fr}}
 .pdetail .big{border-radius:var(--radius);overflow:hidden;aspect-ratio:1/1;background:var(--soft);border:1px solid var(--line)}
@@ -442,7 +456,7 @@ function storeHeader(r){const s=db.settings,u=me;const L=(p,t)=>`<a href="#/${p}
  </div></header>`}
 function storeLayout(r){let main;const need=['account','topup','orders'];
  if(need.includes(r[0])&&!me){main=vLogin('กรุณาเข้าสู่ระบบก่อนใช้งานหน้านี้')}
- else switch(r[0]){case undefined:main=vHome();break;case 'categories':main=vCategories();break;case 'products':main=vProducts();break;case 'product':main=vProduct(r[1]);break;
+ else switch(r[0]){case undefined:main=vHome();break;case 'categories':main=vCategories();break;case 'category':main=vCategory(r[1]);break;case 'products':main=vProducts();break;case 'product':main=vProduct(r[1]);break;
   case 'login':main=me?vAccount():vLogin();break;case 'register':main=me?vAccount():vRegister();break;case 'account':main=vAccount();break;case 'topup':main=vTopup();break;case 'orders':main=vOrders();break;default:main=`<section class="container page">${empty('ไม่พบหน้าที่ต้องการ')}<div class="row" style="justify-content:center"><a class="btn primary" href="#/">กลับหน้าแรก</a></div></section>`}
  return (db.settings.announce?`<div class="announce">${esc(db.settings.announce)}</div>`:'')+storeHeader(r)+`<main>${main}</main><footer class="foot"><div class="container">© ${new Date().getFullYear()} ${esc(db.settings.storeName)} • ระบบตัวอย่าง (ข้อมูลเก็บในเบราว์เซอร์)</div></footer>`}
 function pcard(p){const pr=priceFor(p,me),c=catOf(p.categoryId);
@@ -471,8 +485,14 @@ function vHome(){const vis=visibleProducts(),sold=soldMap();
  <div class="sec" style="margin-top:0"><div class="row between"><h2>หมวดหมู่สินค้า</h2><a class="btn sm" href="#/categories">ทั้งหมด →</a></div>
  ${cats.length?`<div class="chips">${cats.map(c=>`<button data-act="goCat" data-id="${c.id}">${esc(c.name)}</button>`).join('')}</div>`:empty('ยังไม่มีหมวดหมู่')}</div>
  ${sec('⭐ สินค้าแนะนำ',rec,'')}${sec('📦 สินค้าพร้อมส่ง',st,'stock')}${sec('🕒 สินค้าพรีออเดอร์',pre,'preorder')}</section>`}
+const crumb=a=>`<nav class="crumb"><a href="#/">🏠 หน้าแรก</a>${a.map(x=>`<span>›</span>${x[1]?`<a href="${x[1]}">${esc(x[0])}</a>`:`<b>${esc(x[0])}</b>`}`).join('')}</nav>`;
 function vCategories(){const cats=db.categories.filter(c=>c.active).sort(byOrder);
- return `<section class="container page"><h1>หมวดหมู่สินค้า</h1>${cats.length?`<div class="cgrid">${cats.map(c=>{const n=db.products.filter(p=>p.active&&p.categoryId===c.id).length;return `<a class="ccard" data-act="goCat" data-id="${c.id}"><img src="${imgOf(c)}" alt="${esc(c.name)}"><div><b>${esc(c.name)}</b><br><small>${n} รายการ</small></div></a>`}).join('')}</div>`:empty('ยังไม่มีหมวดหมู่')}</section>`}
+ return `<section class="container page">${crumb([['หมวดหมู่ทั้งหมด']])}<p class="klabel">Select Category</p><h1 style="margin:2px 0 0">เลือกหมวดหมู่ที่คุณสนใจ</h1>${cats.length?`<div class="cgrid2">${cats.map(c=>{const n=db.products.filter(p=>p.active&&p.categoryId===c.id).length;return `<div class="cat2"><a href="#/category/${c.id}"><img src="${imgOf(c)}" alt="${esc(c.name)}" loading="lazy"></a><div class="row"><div><b>${esc(c.name)}</b><br><small class="muted">มีสินค้า ${n} รายการ</small></div><a class="btn primary sm" href="#/category/${c.id}">สินค้าทั้งหมด</a></div></div>`}).join('')}</div>`:empty('ยังไม่มีหมวดหมู่')}</section>`}
+function vCategory(id){const c=db.categories.find(x=>x.id===id);
+ if(!c||!c.active)return `<section class="container page">${empty('ไม่พบหมวดหมู่นี้')}<div class="row" style="justify-content:center"><a class="btn primary" href="#/categories">กลับไปหมวดหมู่ทั้งหมด</a></div></section>`;
+ const list=visibleProducts().filter(p=>p.categoryId===id);
+ return `<section class="container page">${crumb([['หมวดหมู่ทั้งหมด','#/categories'],[c.name]])}${c.image?`<div class="cbanner"><img src="${c.image}" alt="${esc(c.name)}"></div>`:''}<p class="klabel" style="margin-top:16px">ข้อมูลหมวดหมู่</p><h1 style="margin:2px 0 0">${esc(c.name)}</h1>
+ ${list.length?`<div class="pgrid2">${list.map(p=>{const pr=priceFor(p,me),out=p.type==='stock'&&p.stock<=0;return `<div class="pc2"><a href="#/product/${p.id}"><img src="${imgOf(p)}" alt="${esc(p.name)}" loading="lazy"></a><h4>${esc(p.name)}</h4><div class="pp">${pr.price.toLocaleString('th-TH')} บาท</div><a class="btn primary block" href="#/product/${p.id}" ${out?'style="opacity:.55"':''}>${out?'สินค้าหมด':(p.type==='preorder'?'สั่งพรีออเดอร์':'ซื้อสินค้านี้')}</a><div class="stk2">${p.type==='stock'?(out?'ไม่มีสินค้าในสต๊อก':'เหลือทั้งหมด '+p.stock+' ชิ้น'):'พรีออเดอร์'+(p.etaDate?' • คาดว่าเข้า '+fday(p.etaDate):'')}</div></div>`}).join('')}</div>`:empty('ยังไม่มีสินค้าในหมวดหมู่นี้')}</section>`}
 function shopFiltered(){const f=ui.shop,q=f.q.trim().toLowerCase();let l=visibleProducts().filter(p=>(!q||p.name.toLowerCase().includes(q)||(p.description||'').toLowerCase().includes(q))&&(!f.cat||p.categoryId===f.cat)&&(!f.type||p.type===f.type));
  const sold=soldMap(),pf=p=>priceFor(p,me).price;
  if(f.sort==='asc')l.sort((a,b)=>pf(a)-pf(b));else if(f.sort==='desc')l.sort((a,b)=>pf(b)-pf(a));else if(f.sort==='name')l.sort((a,b)=>a.name.localeCompare(b.name,'th'));else if(f.sort==='sold')l.sort((a,b)=>(sold[b.id]||0)-(sold[a.id]||0));return l}
@@ -490,11 +510,11 @@ function vProducts(){const f=ui.shop;
 function vProduct(id){const p=prodOf(id);if(!p||!p.active||!catActive(p.categoryId))return `<section class="container page">${empty('ไม่พบสินค้า หรือสินค้านี้ปิดการจำหน่ายแล้ว')}<div class="row" style="justify-content:center"><a class="btn primary" href="#/products">กลับไปหน้ารายการสินค้า</a></div></section>`;
  const pr=priceFor(p,me),c=catOf(p.categoryId);const out=p.type==='stock'&&p.stock<=0;
  const status=p.type==='stock'?(out?'<span class="err-t">❌ สินค้าหมด</span>':`<span class="ok-t">✅ พร้อมส่ง • คงเหลือ ${p.stock} ชิ้น</span>`):`<span class="pre-t">🕒 สินค้าพรีออเดอร์${p.etaDate?' • คาดว่าสินค้าเข้าร้าน '+fday(p.etaDate):''}${p.etaNote?' ('+esc(p.etaNote)+')':''}</span>`;
- return `<section class="container page"><p class="muted"><a href="#/products">สินค้าทั้งหมด</a> › ${esc(c?c.name:'ไม่ระบุหมวดหมู่')}</p>
- <div class="pdetail"><div class="big"><img src="${imgOf(p)}" alt="${esc(p.name)}"></div><div>
+ return `<section class="container page">${crumb([['หมวดหมู่ทั้งหมด','#/categories'],...(c?[[c.name,'#/category/'+c.id]]:[]),[p.name]])}
+ <div class="pdetail"><div class="big" style="position:relative"><img src="${imgOf(p)}" alt="${esc(p.name)}"><button class="zoom" data-act="zoomImg" data-id="${p.id}">🔍 ขยายรูปภาพ</button></div><div>
  <div class="row">${typeBadge(p.type)}${pr.kind!=='normal'?badge(pr.kind==='agent'?'ราคาตัวแทน':'ราคาพิเศษสำหรับคุณ','sp'):''}</div>
  <h1>${esc(p.name)}</h1><div class="price"><span class="bigprice">${money(pr.price)}</span>${pr.price<p.price?`<s>${money(p.price)}</s>`:''}</div>
- <p>${status}</p><p style="white-space:pre-line">${esc(p.description||'ไม่มีรายละเอียดสินค้า')}</p>
+ <p>${status}</p><div class="card" style="margin-top:12px"><div class="muted" style="font-size:.88em;margin-bottom:8px">ⓘ รายละเอียดสินค้า</div><div style="white-space:pre-line">${esc(p.description||'ไม่มีรายละเอียดสินค้า')}</div></div>
  <div class="row" style="margin-top:18px">${me?`<button class="btn primary" data-act="openBuy" data-id="${p.id}" ${out?'disabled':''}>${out?'สินค้าหมด':(p.type==='preorder'?'🕒 สั่งพรีออเดอร์':'🛒 สั่งซื้อสินค้า')}</button>`:`<a class="btn primary" href="#/login">เข้าสู่ระบบเพื่อสั่งซื้อ</a>`}<a class="btn" href="#/products">← กลับ</a></div>
  ${me?`<p class="muted" style="margin-top:12px">ยอดเงินในกระเป๋าของคุณ: <b>${money(me.balance)}</b></p>`:''}</div></div></section>`}
 function vLogin(msg){return `<section class="container page"><div class="card authbox"><h2>เข้าสู่ระบบ</h2>${msg?`<p class="muted">${esc(msg)}</p>`:''}
@@ -718,7 +738,8 @@ const acts={
  toggleNav(){ui.nav=!ui.nav;render()},toggleSide(){ui.side=!ui.side;render()},
  logout(){try{localStorage.removeItem(SES)}catch(e){}toast('ออกจากระบบแล้ว');nav('')},
  slide(el){const h=$('#hero');slideTo((+h.dataset.i||0)+ +el.dataset.d);clearInterval(sliderT)},slideTo(el){slideTo(+el.dataset.i);clearInterval(sliderT)},
- goCat(el){ui.shop.cat=el.dataset.id;ui.shop.q='';ui.shop.type='';nav('products')},
+ goCat(el){nav('category/'+el.dataset.id)},
+ zoomImg(el){const p=prodOf(el.dataset.id);if(p)openModal(`<div class="row between" style="margin-bottom:10px"><b>${esc(p.name)}</b><button class="btn sm ghost" data-act="closeModal">✕</button></div><img src="${imgOf(p)}" alt="" style="width:100%;border-radius:12px">`,true)},
  goType(el,e){e.preventDefault();ui.shop.type=el.dataset.type;ui.shop.cat='';ui.shop.q='';nav('products')},
  fillDemo(el){const f=$('form[data-form=login]');if(f){f.email.value=el.dataset.e;f.password.value=el.dataset.p}},
  setAmount(el){const f=$('form[data-form=topup]');if(f)f.amount.value=el.dataset.v},
