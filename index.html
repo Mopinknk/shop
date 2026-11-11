@@ -133,6 +133,7 @@ td.num,th.num{text-align:right}
 .pc2 img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:calc(var(--radius) - 4px);background:var(--soft)}
 .pc2 h4{margin:4px 2px 0;font-size:.95em;font-weight:500}.pc2 .pp{margin:0 2px;color:var(--primary);font-weight:600;font-size:.88em}.pc2 .stk2{text-align:center;font-size:.8em;color:var(--muted)}
 .zoom{position:absolute;right:10px;bottom:10px;border:0;border-radius:8px;padding:6px 10px;background:rgba(0,0,0,.55);color:#fff;font-size:.82em;cursor:pointer}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);margin-top:8px;cursor:pointer;font:inherit}.opt.on{border-color:var(--primary);background:var(--soft);box-shadow:0 0 0 1px var(--primary)}.opt.out{opacity:.55;cursor:not-allowed}
 .pdetail .big img{object-fit:contain;background:#fff}
 @media(max-width:700px){.cgrid2{grid-template-columns:1fr}}
 .pdetail{display:grid;grid-template-columns:1fr 1fr;gap:28px}
@@ -277,7 +278,7 @@ const imgOf=o=>(o&&o.image)||ph(o&&o.name);
 
 /* ---------- Persistence ---------- */
 function migrate(d){if(!Array.isArray(d.shortcuts))d.shortcuts=[];
- if(!d.shortcutsSeeded){d.shortcutsSeeded=true;if(!d.shortcuts.length)d.shortcuts=[['สินค้าทั้งหมด','#/products'],['เติมเงิน','#/topup'],['หมวดหมู่สินค้า','#/categories'],['คำสั่งซื้อของฉัน','#/orders']].map((x,i)=>({id:uid(),title:x[0],url:x[1],image:'',active:true,order:i}));d.settings=d.settings||{};if(!d.settings.announce)d.settings.announce='ยินดีต้อนรับ — เว็บไซต์พร้อมให้บริการ กดสั่งซื้อได้ตลอด 24 ชม.'}(d.orders||[]).forEach(o=>{if(o.type==='stock'&&o.status!=='done'&&o.status!=='cancelled'){o.status='done';(o.history=o.history||[]).push({status:'done',at:new Date().toISOString()})}});(d.products||[]).forEach(p=>{if(!Array.isArray(p.items)){p.items=[];if(p.type==='stock')for(let i=1;i<=(+p.stock||0);i++)p.items.push({id:uid(),text:p.name+' #'+String(i).padStart(3,'0'),sold:false,orderId:''})}});return d}
+ if(!d.shortcutsSeeded){d.shortcutsSeeded=true;if(!d.shortcuts.length)d.shortcuts=[['สินค้าทั้งหมด','#/products'],['เติมเงิน','#/topup'],['หมวดหมู่สินค้า','#/categories'],['คำสั่งซื้อของฉัน','#/orders']].map((x,i)=>({id:uid(),title:x[0],url:x[1],image:'',active:true,order:i}));d.settings=d.settings||{};if(!d.settings.announce)d.settings.announce='ยินดีต้อนรับ — เว็บไซต์พร้อมให้บริการ กดสั่งซื้อได้ตลอด 24 ชม.'}(d.orders||[]).forEach(o=>{if(o.type==='stock'&&o.status!=='done'&&o.status!=='cancelled'){o.status='done';(o.history=o.history||[]).push({status:'done',at:new Date().toISOString()})}});(d.products||[]).forEach(p=>{if(!Array.isArray(p.options))p.options=[];if(!Array.isArray(p.items)){p.items=[];if(p.type==='stock')for(let i=1;i<=(+p.stock||0);i++)p.items.push({id:uid(),text:p.name+' #'+String(i).padStart(3,'0'),sold:false,orderId:''})}});return d}
 function load(){try{const raw=localStorage.getItem(LS);if(raw){const d=JSON.parse(raw);if(d&&d.v===1)return migrate(d)}}catch(e){}
  const d=migrate(seed());try{localStorage.setItem(LS,JSON.stringify(d))}catch(e){}return d}
 function save(){try{localStorage.setItem(LS,JSON.stringify(db));return true}catch(e){toast('บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์เต็ม ลองลบรูปที่ไม่ใช้ออก','err');return false}}
@@ -287,7 +288,7 @@ function commit(fn){const snap=JSON.stringify(db);try{fn()}catch(e){db=JSON.pars
 /* ---------- Core domain helpers (ใช้ภายใน commit เท่านั้น) ---------- */
 function nextNo(prefix,key,iso){db.counters[key]=(db.counters[key]||0)+1;const d=new Date(iso||Date.now());return `${prefix}-${String(d.getFullYear()).slice(2)}${pad(d.getMonth()+1)}${pad(d.getDate())}-${String(db.counters[key]).padStart(4,'0')}`}
 function addTx(u,type,amount,ref,note,iso){const nb=r2(u.balance+amount);if(nb<0)throw new Error('ยอดเงินคงเหลือไม่เพียงพอ');u.balance=nb;db.tx.push({id:uid(),userId:u.id,type,amount:r2(amount),balanceAfter:nb,ref:ref||'',note:note||'',createdAt:iso||new Date().toISOString()})}
-function priceFor(p,u){const sp=u&&db.specialPrices.find(s=>s.userId===u.id&&s.productId===p.id);
+function priceFor(p,u,opt){if(opt)return{price:+opt.price,kind:'normal'};const sp=u&&db.specialPrices.find(s=>s.userId===u.id&&s.productId===p.id);
  if(sp)return{price:sp.price,kind:'special'};
  if(u&&u.role==='agent'&&p.agentPrice!=null&&p.agentPrice!=='')return{price:+p.agentPrice,kind:'agent'};
  return{price:+p.price,kind:'normal'}}
@@ -308,11 +309,17 @@ function receiptModal(o){const p=prodOf(o.productId);const its=o.items||[];
  <p class="muted" style="font-size:.82em;margin:12px 0">ข้อมูลนี้เป็นข้อมูลจากทางร้านค้า โปรดตรวจสอบข้อมูลก่อนยืนยัน</p>
  <button class="btn primary block" style="padding:.85em;font-size:1.05em" data-act="copyReceipt" data-id="${o.id}">คัดลอกข้อมูล</button>`,true)}
 const amtTxt=t=>t.amount>0?money(t.amount):'รอตรวจสอบสลิป';
-function syncStock(p){if(p.type==='stock')p.stock=(p.items||[]).filter(i=>!i.sold).length}
-function createOrder(u,p,qty,iso){iso=iso||new Date().toISOString();const pr=priceFor(p,u);const total=r2(pr.price*qty);
- let taken=[];if(p.type==='stock'){taken=(p.items||[]).filter(i=>!i.sold);if(taken.length<qty)throw new Error('สินค้าคงเหลือไม่เพียงพอ');taken=taken.slice(0,qty)}
- const o={id:uid(),no:nextNo('ORD','order',iso),userId:u.id,productId:p.id,name:p.name,type:p.type,qty,unitPrice:pr.price,total,status:p.type==='stock'?'done':'po_wait',etaDate:p.etaDate||'',createdAt:iso,history:[],refunded:false,items:taken.map(i=>i.text)};taken.forEach(i=>{i.sold=true;i.orderId=o.id});syncStock(p);
- o.history.push({status:o.status,at:iso});addTx(u,'purchase',-total,o.no,p.name+' x'+qty,iso);db.orders.push(o);return o}
+const optOf=(p,id)=>(p.options||[]).find(o=>o.id===id)||null;
+const avail=o=>(o.items||[]).filter(i=>!i.sold).length;
+const allItems=p=>p.options&&p.options.length?p.options.flatMap(o=>o.items||[]):(p.items||[]);
+const itemsOf=(p,oid)=>{const o=optOf(p,oid);return o?(o.items=o.items||[]):(p.items=p.items||[])};
+const priceRange=p=>{if(!(p.options&&p.options.length))return money(p.price);const v=p.options.map(o=>+o.price),a=Math.min(...v),b=Math.max(...v);return a===b?money(a):money(a)+' - '+money(b)};
+const rangeBaht=p=>{if(!(p.options&&p.options.length))return (+p.price).toLocaleString('th-TH')+' บาท';const v=p.options.map(o=>+o.price),a=Math.min(...v),b=Math.max(...v);return a===b?a.toLocaleString('th-TH')+' บาท':a.toLocaleString('th-TH')+' - '+b.toLocaleString('th-TH')+' บาท'};
+function syncStock(p){if(p.options&&p.options.length)p.price=Math.min(...p.options.map(o=>+o.price));if(p.type==='stock')p.stock=allItems(p).filter(i=>!i.sold).length}
+function createOrder(u,p,qty,iso,opt){iso=iso||new Date().toISOString();const pr=priceFor(p,u,opt);const total=r2(pr.price*qty);
+ let taken=[];if(p.type==='stock'){taken=(opt?itemsOf(p,opt.id):(p.items||[])).filter(i=>!i.sold);if(taken.length<qty)throw new Error('สินค้าคงเหลือไม่เพียงพอ');taken=taken.slice(0,qty)}
+ const o={id:uid(),no:nextNo('ORD','order',iso),userId:u.id,productId:p.id,optionId:opt?opt.id:'',name:p.name+(opt?' • '+opt.name:''),type:p.type,qty,unitPrice:pr.price,total,status:p.type==='stock'?'done':'po_wait',etaDate:p.etaDate||'',createdAt:iso,history:[],refunded:false,items:taken.map(i=>i.text)};taken.forEach(i=>{i.sold=true;i.orderId=o.id});syncStock(p);
+ o.history.push({status:o.status,at:iso});addTx(u,'purchase',-total,o.no,o.name+' x'+qty,iso);db.orders.push(o);return o}
 function newTopup(u,amount,bank,slip,hash,iso){const t={id:uid(),no:nextNo('TOP','topup',iso),userId:u.id,amount:r2(amount),bankId:bank?bank.id:'',bankLabel:bank?bank.bankName+' '+bank.accNo:'',slip:slip||'',slipHash:hash||'',status:'pending',note:'',apiMsg:'',method:'',createdAt:iso,reviewedAt:null,reviewedBy:''};db.topups.push(t);return t}
 function approveTopup(id,by){const t=db.topups.find(x=>x.id===id);if(!t)throw new Error('ไม่พบรายการเติมเงิน');
  if(t.status!=='pending')throw new Error('รายการนี้ถูกดำเนินการไปแล้ว');if(!(t.amount>0))throw new Error('กรุณาระบุจำนวนเงินที่เติมก่อนอนุมัติ');
@@ -325,7 +332,7 @@ function setOrderStatus(id,ns){const o=db.orders.find(x=>x.id===id);if(!o)throw 
  if(o.status==='cancelled')throw new Error('คำสั่งซื้อที่ยกเลิกแล้วแก้ไขไม่ได้');if(!FLOW[o.type].includes(ns))throw new Error('สถานะไม่ถูกต้อง');
  const now=new Date().toISOString();
  if(ns==='cancelled'&&!o.refunded){const u=db.users.find(x=>x.id===o.userId);if(u)addTx(u,'refund',o.total,o.no,'คืนเงินจากการยกเลิก '+o.name,now);o.refunded=true;
-  if(o.type==='stock'){const p=db.products.find(x=>x.id===o.productId);if(p){(p.items||[]).forEach(i=>{if(i.orderId===o.id){i.sold=false;i.orderId=''}});syncStock(p)}}}
+  if(o.type==='stock'){const p=db.products.find(x=>x.id===o.productId);if(p){allItems(p).forEach(i=>{if(i.orderId===o.id){i.sold=false;i.orderId=''}});syncStock(p)}}}
  o.status=ns;o.history.push({status:ns,at:now});notify('status',`คำสั่งซื้อ ${o.no} เปลี่ยนสถานะเป็น "${ST[ns][0]}"`,o.userId)}
 
 /* ---------- Seed data ---------- */
@@ -461,14 +468,14 @@ function storeLayout(r){let main;const need=['account','topup','orders'];
  return (db.settings.announce?`<div class="announce">${esc(db.settings.announce)}</div>`:'')+storeHeader(r)+`<main>${main}</main><footer class="foot"><div class="container">© ${new Date().getFullYear()} ${esc(db.settings.storeName)} • ระบบตัวอย่าง (ข้อมูลเก็บในเบราว์เซอร์)</div></footer>`}
 function pcard(p){const pr=priceFor(p,me),c=catOf(p.categoryId);
  const stock=p.type==='stock'?(p.stock>0?`<span class="ok-t">พร้อมส่ง • เหลือ ${p.stock} ชิ้น</span>`:'<span class="err-t">สินค้าหมด</span>'):`<span class="pre-t">พรีออเดอร์${p.etaDate?' • คาดว่าเข้า '+fday(p.etaDate):''}</span>`;
- return `<a class="pcard" href="#/product/${p.id}"><div class="pimg"><img loading="lazy" src="${imgOf(p)}" alt="${esc(p.name)}">${typeBadge(p.type)}</div><div class="pbody"><small class="muted">${esc(c?c.name:'ไม่ระบุหมวดหมู่')}</small><h4>${esc(p.name)}</h4><div class="price"><b>${money(pr.price)}</b>${pr.price<p.price?`<s>${money(p.price)}</s>`:''}${pr.kind!=='normal'?badge(pr.kind==='agent'?'ราคาตัวแทน':'ราคาพิเศษ','sp'):''}</div><div class="stk">${stock}</div></div></a>`}
+ return `<a class="pcard" href="#/product/${p.id}"><div class="pimg"><img loading="lazy" src="${imgOf(p)}" alt="${esc(p.name)}">${typeBadge(p.type)}</div><div class="pbody"><small class="muted">${esc(c?c.name:'ไม่ระบุหมวดหมู่')}</small><h4>${esc(p.name)}</h4><div class="price"><b>${p.options&&p.options.length?priceRange(p):money(pr.price)}</b>${pr.price<p.price?`<s>${money(p.price)}</s>`:''}${pr.kind!=='normal'?badge(pr.kind==='agent'?'ราคาตัวแทน':'ราคาพิเศษ','sp'):''}</div><div class="stk">${stock}</div></div></a>`}
 function safeUrl(u){u=(u||'').trim();if(!u)return '';if(/^#\//.test(u))return u;if(/^https?:\/\//i.test(u))return u;if(/^[a-z][a-z0-9+.-]*:/i.test(u))return '';if(/^[\w-]+(\.[\w-]+)+(\/|$|\?|#)/i.test(u))return 'https://'+u;return ''}
 function shortcutsHtml(){const l=db.shortcuts.filter(x=>x.active).sort(byOrder);if(!l.length)return '';
  return `<div class="shortcuts">${l.map(x=>{const u=safeUrl(x.url),inner=(x.image?`<img src="${x.image}" alt="${esc(x.title)}" loading="lazy">`:'')+(x.image?'':`<span>${esc(x.title)}</span>`);
  if(!u)return `<div class="sc" title="${esc(x.title)}">${inner}</div>`;
  const ext=!u.startsWith('#/');return `<a class="sc" href="${esc(u)}" title="${esc(x.title)}" aria-label="${esc(x.title)}"${ext?' target="_blank" rel="noopener noreferrer"':''}>${inner}</a>`}).join('')}</div>`}
 function homeStatsHtml(){const vis=visibleProducts(),sold=soldMap();
- const users=db.users.filter(u=>u.role!=='admin').length,stock=vis.filter(p=>p.type==='stock').reduce((a,p)=>a+(p.items||[]).filter(i=>!i.sold).length,0),soldAll=Object.values(sold).reduce((a,b)=>a+b,0);
+ const users=db.users.filter(u=>u.role!=='admin').length,stock=vis.filter(p=>p.type==='stock').reduce((a,p)=>a+allItems(p).filter(i=>!i.sold).length,0),soldAll=Object.values(sold).reduce((a,b)=>a+b,0);
  const c=[['👤','ผู้ใช้ทั้งหมด',users,'คน'],['🛍️','สินค้าทั้งหมด',vis.length,'ชิ้น'],['📦','สต๊อกทั้งหมด',stock,'ชิ้น'],['✅','ขายแล้วทั้งหมด',soldAll,'ชิ้น']];
  return `<div class="hstats">${c.map(x=>`<div class="card"><span class="muted">${x[1]}</span><b>${x[2].toLocaleString('th-TH')} <small>${x[3]}</small></b><span class="ic">${x[0]}</span></div>`).join('')}</div>`}
 function heroHtml(){const bs=db.banners.filter(b=>b.active).sort(byOrder);
@@ -492,7 +499,7 @@ function vCategory(id){const c=db.categories.find(x=>x.id===id);
  if(!c||!c.active)return `<section class="container page">${empty('ไม่พบหมวดหมู่นี้')}<div class="row" style="justify-content:center"><a class="btn primary" href="#/categories">กลับไปหมวดหมู่ทั้งหมด</a></div></section>`;
  const list=visibleProducts().filter(p=>p.categoryId===id);
  return `<section class="container page">${crumb([['หมวดหมู่ทั้งหมด','#/categories'],[c.name]])}${c.image?`<div class="cbanner"><img src="${c.image}" alt="${esc(c.name)}"></div>`:''}<p class="klabel" style="margin-top:16px">ข้อมูลหมวดหมู่</p><h1 style="margin:2px 0 0">${esc(c.name)}</h1>
- ${list.length?`<div class="pgrid2">${list.map(p=>{const pr=priceFor(p,me),out=p.type==='stock'&&p.stock<=0;return `<div class="pc2"><a href="#/product/${p.id}"><img src="${imgOf(p)}" alt="${esc(p.name)}" loading="lazy"></a><h4>${esc(p.name)}</h4><div class="pp">${pr.price.toLocaleString('th-TH')} บาท</div><a class="btn primary block" href="#/product/${p.id}" ${out?'style="opacity:.55"':''}>${out?'สินค้าหมด':(p.type==='preorder'?'สั่งพรีออเดอร์':'ซื้อสินค้านี้')}</a><div class="stk2">${p.type==='stock'?(out?'ไม่มีสินค้าในสต๊อก':'เหลือทั้งหมด '+p.stock+' ชิ้น'):'พรีออเดอร์'+(p.etaDate?' • คาดว่าเข้า '+fday(p.etaDate):'')}</div></div>`}).join('')}</div>`:empty('ยังไม่มีสินค้าในหมวดหมู่นี้')}</section>`}
+ ${list.length?`<div class="pgrid2">${list.map(p=>{const pr=priceFor(p,me),out=p.type==='stock'&&p.stock<=0;return `<div class="pc2"><a href="#/product/${p.id}"><img src="${imgOf(p)}" alt="${esc(p.name)}" loading="lazy"></a><h4>${esc(p.name)}</h4><div class="pp">${rangeBaht(p)}</div><a class="btn primary block" href="#/product/${p.id}" ${out?'style="opacity:.55"':''}>${out?'สินค้าหมด':(p.type==='preorder'?'สั่งพรีออเดอร์':'ซื้อสินค้านี้')}</a><div class="stk2">${p.type==='stock'?(out?'ไม่มีสินค้าในสต๊อก':'เหลือทั้งหมด '+p.stock+' ชิ้น'):'พรีออเดอร์'+(p.etaDate?' • คาดว่าเข้า '+fday(p.etaDate):'')}</div></div>`}).join('')}</div>`:empty('ยังไม่มีสินค้าในหมวดหมู่นี้')}</section>`}
 function shopFiltered(){const f=ui.shop,q=f.q.trim().toLowerCase();let l=visibleProducts().filter(p=>(!q||p.name.toLowerCase().includes(q)||(p.description||'').toLowerCase().includes(q))&&(!f.cat||p.categoryId===f.cat)&&(!f.type||p.type===f.type));
  const sold=soldMap(),pf=p=>priceFor(p,me).price;
  if(f.sort==='asc')l.sort((a,b)=>pf(a)-pf(b));else if(f.sort==='desc')l.sort((a,b)=>pf(b)-pf(a));else if(f.sort==='name')l.sort((a,b)=>a.name.localeCompare(b.name,'th'));else if(f.sort==='sold')l.sort((a,b)=>(sold[b.id]||0)-(sold[a.id]||0));return l}
@@ -508,14 +515,16 @@ function vProducts(){const f=ui.shop;
  <select data-bind="shop.sort" data-list="shopList">${[['rec','เรียงตามแนะนำ'],['sold','ขายดี'],['asc','ราคาต่ำ → สูง'],['desc','ราคาสูง → ต่ำ'],['name','ชื่อ ก-ฮ']].map(o=>`<option value="${o[0]}" ${f.sort===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
  </div><div id="shopList">${shopListHtml()}</div></section>`}
 function vProduct(id){const p=prodOf(id);if(!p||!p.active||!catActive(p.categoryId))return `<section class="container page">${empty('ไม่พบสินค้า หรือสินค้านี้ปิดการจำหน่ายแล้ว')}<div class="row" style="justify-content:center"><a class="btn primary" href="#/products">กลับไปหน้ารายการสินค้า</a></div></section>`;
- const pr=priceFor(p,me),c=catOf(p.categoryId);const out=p.type==='stock'&&p.stock<=0;
- const status=p.type==='stock'?(out?'<span class="err-t">❌ สินค้าหมด</span>':`<span class="ok-t">✅ พร้อมส่ง • คงเหลือ ${p.stock} ชิ้น</span>`):`<span class="pre-t">🕒 สินค้าพรีออเดอร์${p.etaDate?' • คาดว่าสินค้าเข้าร้าน '+fday(p.etaDate):''}${p.etaNote?' ('+esc(p.etaNote)+')':''}</span>`;
+ const hasO=p.options&&p.options.length,sel=hasO?(optOf(p,ui.opt&&ui.opt[p.id])||p.options.find(o=>p.type==='preorder'||avail(o)>0)||p.options[0]):null;
+ const pr=priceFor(p,me,sel),c=catOf(p.categoryId),stockN=hasO?avail(sel):p.stock;const out=p.type==='stock'&&stockN<=0;
+ const status=p.type==='stock'?(out?'<span class="err-t">❌ สินค้าหมด</span>':`<span class="ok-t">✅ พร้อมส่ง • คงเหลือ ${stockN} ชิ้น</span>`):`<span class="pre-t">🕒 สินค้าพรีออเดอร์${p.etaDate?' • คาดว่าสินค้าเข้าร้าน '+fday(p.etaDate):''}${p.etaNote?' ('+esc(p.etaNote)+')':''}</span>`;
  return `<section class="container page">${crumb([['หมวดหมู่ทั้งหมด','#/categories'],...(c?[[c.name,'#/category/'+c.id]]:[]),[p.name]])}
  <div class="pdetail"><div class="big" style="position:relative"><img src="${imgOf(p)}" alt="${esc(p.name)}"><button class="zoom" data-act="zoomImg" data-id="${p.id}">🔍 ขยายรูปภาพ</button></div><div>
  <div class="row">${typeBadge(p.type)}${pr.kind!=='normal'?badge(pr.kind==='agent'?'ราคาตัวแทน':'ราคาพิเศษสำหรับคุณ','sp'):''}</div>
  <h1>${esc(p.name)}</h1><div class="price"><span class="bigprice">${money(pr.price)}</span>${pr.price<p.price?`<s>${money(p.price)}</s>`:''}</div>
  <p>${status}</p><div class="card" style="margin-top:12px"><div class="muted" style="font-size:.88em;margin-bottom:8px">ⓘ รายละเอียดสินค้า</div><div style="white-space:pre-line">${esc(p.description||'ไม่มีรายละเอียดสินค้า')}</div></div>
- <div class="row" style="margin-top:18px">${me?`<button class="btn primary" data-act="openBuy" data-id="${p.id}" ${out?'disabled':''}>${out?'สินค้าหมด':(p.type==='preorder'?'🕒 สั่งพรีออเดอร์':'🛒 สั่งซื้อสินค้า')}</button>`:`<a class="btn primary" href="#/login">เข้าสู่ระบบเพื่อสั่งซื้อ</a>`}<a class="btn" href="#/products">← กลับ</a></div>
+ ${hasO?`<div class="card" style="margin-top:12px"><div class="muted" style="font-size:.88em">☰ ตัวเลือกสินค้า</div>${p.options.map(o=>{const n=avail(o),oo=p.type==='stock'&&n<=0,pt=money(o.price);return `<button type="button" class="opt ${sel&&o.id===sel.id?'on':''} ${oo?'out':''}" data-act="pickOpt" data-id="${p.id}" data-o="${o.id}" ${oo?'disabled':''}><span><b>${esc(o.name)}</b><br><small class="muted">${oo?`<s>${pt}</s>`:pt}</small></span>${p.type==='stock'?(oo?badge('สินค้าหมด','err'):badge('เหลือ '+n+' ชิ้น','ok')):badge('พรีออเดอร์','info')}</button>`}).join('')}</div>`:''}
+  <div class="row" style="margin-top:18px">${me?`<button class="btn primary" data-act="openBuy" data-id="${p.id}" data-o="${sel?sel.id:''}" ${out?'disabled':''}>${out?'สินค้าหมด':(p.type==='preorder'?'🕒 สั่งพรีออเดอร์':'🛒 สั่งซื้อสินค้า')}</button>`:`<a class="btn primary" href="#/login">เข้าสู่ระบบเพื่อสั่งซื้อ</a>`}<a class="btn" href="#/products">← กลับ</a></div>
  ${me?`<p class="muted" style="margin-top:12px">ยอดเงินในกระเป๋าของคุณ: <b>${money(me.balance)}</b></p>`:''}</div></div></section>`}
 function vLogin(msg){return `<section class="container page"><div class="card authbox"><h2>เข้าสู่ระบบ</h2>${msg?`<p class="muted">${esc(msg)}</p>`:''}
  <form data-form="login" class="fgrid" style="grid-template-columns:1fr"><label>อีเมล<input name="email" type="email" required autocomplete="username"></label><label>รหัสผ่าน<input name="password" type="password" required autocomplete="current-password"></label><button class="btn primary block">เข้าสู่ระบบ</button></form>
@@ -596,21 +605,22 @@ function openProductForm(id){const p=id?prodOf(id):null;const d=p||{name:'',cate
  <label class="full">ชื่อสินค้า *<input name="name" required maxlength="120" value="${esc(d.name)}"></label>
  <label>หมวดหมู่<select name="categoryId"><option value="">— ไม่ระบุ —</option>${db.categories.sort(byOrder).map(c=>`<option value="${c.id}" ${d.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>
  <label>ประเภทสินค้า<select name="type" data-change="prodTypeSwitch"><option value="stock" ${d.type==='stock'?'selected':''}>พร้อมส่ง (In Stock)</option><option value="preorder" ${d.type==='preorder'?'selected':''}>พรีออเดอร์ (Pre-Order)</option></select></label>
- <label>ราคาปกติ (บาท) *<input name="price" type="number" min="0" step="0.01" required value="${esc(d.price)}"></label>
+ <label>ราคาปกติ (บาท) *<input name="price" type="number" min="0" step="0.01" value="${esc(d.price)}"></label>
  <label>ราคาสำหรับตัวแทน (บาท)<input name="agentPrice" type="number" min="0" step="0.01" placeholder="เว้นว่าง = ใช้ราคาปกติ" value="${d.agentPrice!=null?esc(d.agentPrice):''}"></label>
  <label id="stockBox" class="full" ${d.type==='stock'?'':'hidden'}>รายการสินค้าในสต๊อก — สต๊อก 1 ชิ้นพิมพ์ได้หลายบรรทัด แล้วคั่นชิ้นถัดไปด้วยบรรทัดที่มีแค่เครื่องหมาย !<textarea name="stockItems" data-spv rows="8" placeholder="สต๊อกชิ้นที่ 1 (พิมพ์กี่บรรทัดก็ได้)&#10;!&#10;สต๊อกชิ้นที่ 2&#10;!&#10;สต๊อกชิ้นที่ 3">${esc((d.items||[]).filter(i=>!i.sold).map(i=>i.text).join('\n!\n'))}</textarea><div class="spv" style="margin-top:6px;padding:10px;border-radius:10px;background:var(--soft)"></div></label>
+ <label class="full">ตัวเลือกสินค้า (ไม่บังคับ) — บรรทัดละ 1 ตัวเลือก รูปแบบ <b>ชื่อ | ราคา</b><textarea name="options" rows="4" placeholder="สีชมพู | 199&#10;สีฟ้า | 199&#10;สีเขียว | 219">${esc((d.options||[]).map(o=>o.name+' | '+o.price).join('\n'))}</textarea><small class="muted">ถ้ามีตัวเลือก ราคาและสต๊อกจะแยกตามตัวเลือก (เพิ่มสต๊อกของแต่ละตัวเลือกที่ปุ่ม "สต๊อก") ช่องราคาปกติ/ราคาตัวแทน/รายการสต๊อกด้านบนจะไม่ถูกใช้</small></label>
  <label id="etaBox" ${d.type==='preorder'?'':'hidden'}>วันที่คาดว่าสินค้าเข้าร้าน<input name="etaDate" type="date" value="${esc(d.etaDate)}"></label>
  <label id="etaNoteBox" class="full" ${d.type==='preorder'?'':'hidden'}>ระยะเวลา/หมายเหตุพรีออเดอร์<input name="etaNote" maxlength="150" placeholder="เช่น ประมาณ 14-21 วันหลังปิดรับพรีออเดอร์" value="${esc(d.etaNote)}"></label>
  <label class="full">รายละเอียดสินค้า<textarea name="description" rows="4" maxlength="2000">${esc(d.description)}</textarea></label>
  <div class="full"><b style="font-size:.9em;color:var(--muted)">รูปภาพสินค้า</b>${imgField('prod',d.image,{max:700,q:0.75,bytes:120000})}</div>
  <label class="chk full"><input type="checkbox" name="active" ${d.active?'checked':''}> เปิดจำหน่ายสินค้า</label>
  <div class="row end full"><button type="button" class="btn" data-act="closeModal">ยกเลิก</button><button class="btn primary">บันทึกสินค้า</button></div></form>`,true)}
-function openStock(id,editId){const p=prodOf(id);if(!p)return;const av=p.items.filter(i=>!i.sold),sold=p.items.filter(i=>i.sold);
+function openStock(id,editId,optId){const p=prodOf(id);if(!p)return;const hasO=p.options&&p.options.length,oid=hasO?(optOf(p,optId)?optId:p.options[0].id):'',its=itemsOf(p,oid),av=its.filter(i=>!i.sold),sold=its.filter(i=>i.sold);
  openModal(`<div class="row between"><h3 style="margin:0">📦 สต๊อก: ${esc(p.name)}</h3><button class="btn sm ghost" data-act="closeModal">✕</button></div>
- <p class="muted">คงเหลือ <b>${av.length}</b> ชิ้น • ขายแล้ว ${sold.length} ชิ้น</p>
- <form data-form="stockAdd" data-id="${p.id}" style="margin-bottom:12px"><label>เพิ่มสต๊อก — 1 ชิ้นพิมพ์ได้หลายบรรทัด ถ้าจะเพิ่มชิ้นถัดไปให้คั่นด้วยบรรทัดที่มีแค่ <b>!</b><textarea name="text" rows="6" maxlength="20000" data-spv required placeholder="สต๊อกชิ้นที่ 1 (พิมพ์กี่บรรทัดก็ได้)&#10;!&#10;สต๊อกชิ้นที่ 2"></textarea></label><div class="spv" style="margin-top:8px;padding:10px;border-radius:10px;background:var(--soft)"><span class="muted">ผลลัพธ์: ยังไม่มีรายการ</span></div><button class="btn primary" style="margin-top:8px">➕ เพิ่มเข้าสต๊อก</button></form>
+ ${hasO?`<div class="chips" style="margin-bottom:8px">${p.options.map(o=>`<button type="button" data-act="stockOpt" data-id="${p.id}" data-o="${o.id}" ${o.id===oid?'style="border-color:var(--primary);color:var(--primary);font-weight:700"':''}>${esc(o.name)} (${avail(o)})</button>`).join('')}</div>`:''}<p class="muted">${hasO?esc(optOf(p,oid).name)+' • ':''}คงเหลือ <b>${av.length}</b> ชิ้น • ขายแล้ว ${sold.length} ชิ้น</p>
+ <form data-form="stockAdd" data-id="${p.id}" data-o="${oid}" style="margin-bottom:12px"><label>เพิ่มสต๊อก — 1 ชิ้นพิมพ์ได้หลายบรรทัด ถ้าจะเพิ่มชิ้นถัดไปให้คั่นด้วยบรรทัดที่มีแค่ <b>!</b><textarea name="text" rows="6" maxlength="20000" data-spv required placeholder="สต๊อกชิ้นที่ 1 (พิมพ์กี่บรรทัดก็ได้)&#10;!&#10;สต๊อกชิ้นที่ 2"></textarea></label><div class="spv" style="margin-top:8px;padding:10px;border-radius:10px;background:var(--soft)"><span class="muted">ผลลัพธ์: ยังไม่มีรายการ</span></div><button class="btn primary" style="margin-top:8px">➕ เพิ่มเข้าสต๊อก</button></form>
 
- ${p.items.length?`<div class="tw" style="max-height:40vh;overflow:auto"><table><thead><tr><th>#</th><th>ข้อมูลสินค้า</th><th>สถานะ</th><th></th></tr></thead><tbody>${p.items.map((i,n)=>{const o=i.sold?db.orders.find(x=>x.id===i.orderId):null;if(editId===i.id&&!i.sold)return `<tr><td>${n+1}</td><td colspan="3"><form data-form="stockEdit" data-id="${p.id}" data-i="${i.id}"><textarea name="text" rows="4" maxlength="20000" required>${esc(i.text)}</textarea><div class="row end" style="margin-top:6px"><button type="button" class="btn sm" data-act="stockEditCancel" data-id="${p.id}">ยกเลิก</button><button class="btn sm primary">💾 บันทึกการแก้ไข</button></div></form></td></tr>`;return `<tr><td>${n+1}</td><td style="white-space:pre-wrap;word-break:break-word">${esc(i.text)}</td><td>${i.sold?badge('ขายแล้ว','gray')+(o?` <small class="muted">${esc(o.no)}</small>`:''):badge('พร้อมส่ง','ok')}</td><td>${i.sold?'':`<button class="btn sm" data-act="stockEdit" data-id="${p.id}" data-i="${i.id}">แก้ไข</button> <button class="btn sm danger" data-act="stockDel" data-id="${p.id}" data-i="${i.id}">ลบ</button>`}</td></tr>`}).join('')}</tbody></table></div>`:empty('ยังไม่มีสินค้าในสต๊อก')}`,true);
+ ${its.length?`<div class="tw" style="max-height:40vh;overflow:auto"><table><thead><tr><th>#</th><th>ข้อมูลสินค้า</th><th>สถานะ</th><th></th></tr></thead><tbody>${its.map((i,n)=>{const o=i.sold?db.orders.find(x=>x.id===i.orderId):null;if(editId===i.id&&!i.sold)return `<tr><td>${n+1}</td><td colspan="3"><form data-form="stockEdit" data-id="${p.id}" data-o="${oid}" data-i="${i.id}"><textarea name="text" rows="4" maxlength="20000" required>${esc(i.text)}</textarea><div class="row end" style="margin-top:6px"><button type="button" class="btn sm" data-act="stockEditCancel" data-id="${p.id}" data-o="${oid}">ยกเลิก</button><button class="btn sm primary">💾 บันทึกการแก้ไข</button></div></form></td></tr>`;return `<tr><td>${n+1}</td><td style="white-space:pre-wrap;word-break:break-word">${esc(i.text)}</td><td>${i.sold?badge('ขายแล้ว','gray')+(o?` <small class="muted">${esc(o.no)}</small>`:''):badge('พร้อมส่ง','ok')}</td><td>${i.sold?'':`<button class="btn sm" data-act="stockEdit" data-id="${p.id}" data-o="${oid}" data-i="${i.id}">แก้ไข</button> <button class="btn sm danger" data-act="stockDel" data-id="${p.id}" data-o="${oid}" data-i="${i.id}">ลบ</button>`}</td></tr>`}).join('')}</tbody></table></div>`:empty('ยังไม่มีสินค้าในสต๊อก')}`,true);
  setTimeout(()=>{const i=$(editId?'form[data-form=stockEdit] textarea':'form[data-form=stockAdd] textarea');if(i)i.focus()},0)}
 /* ---- Categories ---- */
 function aCategories(){const l=[...db.categories].sort(byOrder);
@@ -753,7 +763,8 @@ const acts={
  openBell(){openBell()},
  notifRead(){commit(()=>{const to=me.role==='admin'?['admin',me.id]:[me.id];db.notifs.forEach(n=>{if(to.includes(n.to))n.read=true})});closeModal();render()},
  notifClear(){commit(()=>{const to=me.role==='admin'?['admin',me.id]:[me.id];db.notifs=db.notifs.filter(n=>!to.includes(n.to))});closeModal();render()},
- openBuy(el){if(!me)return nav('login');const p=prodOf(el.dataset.id);if(!p||!p.active)return toast('สินค้านี้ไม่พร้อมจำหน่าย','err');ui.buy={pid:p.id,qty:1};buyModal()},
+ openBuy(el){if(!me)return nav('login');const p=prodOf(el.dataset.id);if(!p||!p.active)return toast('สินค้านี้ไม่พร้อมจำหน่าย','err');ui.buy={pid:p.id,qty:1,opt:el.dataset.o||''};buyModal()},
+ pickOpt(el){ui.opt=ui.opt||{};ui.opt[el.dataset.id]=el.dataset.o;render()},
  buyQtyDelta(el){ui.buy.qty+= +el.dataset.d;buyModal()},
  doBuy(){purchase()},
  /* admin */
@@ -762,9 +773,9 @@ const acts={
  prodDelete:A(async el=>{const p=prodOf(el.dataset.id);if(!p)return;if(!await confirmBox(`ลบสินค้า "${p.name}" ? (ประวัติคำสั่งซื้อเดิมยังคงอยู่)`,'ลบสินค้า',true))return;if(commit(()=>{db.products=db.products.filter(x=>x.id!==p.id);db.specialPrices=db.specialPrices.filter(s=>s.productId!==p.id)}))toast('ลบสินค้าแล้ว','ok');render()}),
  prodMove:A(el=>{moveItem('products',el.dataset.id,+el.dataset.d,prodPred());render()}),
  stockOpen:A(el=>openStock(el.dataset.id)),
- stockEdit:A(el=>openStock(el.dataset.id,el.dataset.i)),
- stockEditCancel:A(el=>openStock(el.dataset.id)),
- stockDel:A(el=>{const id=el.dataset.id;if(commit(()=>{const p=prodOf(id);const it=p.items.find(i=>i.id===el.dataset.i);if(!it||it.sold)throw new Error('ลบชิ้นที่ขายแล้วไม่ได้');p.items=p.items.filter(i=>i!==it);syncStock(p)}))toast('ลบรายการสต๊อกแล้ว','ok');render();openStock(id)}),
+ stockEdit:A(el=>openStock(el.dataset.id,el.dataset.i,el.dataset.o)),stockOpt:A(el=>openStock(el.dataset.id,'',el.dataset.o)),
+ stockEditCancel:A(el=>openStock(el.dataset.id,'',el.dataset.o)),
+ stockDel:A(el=>{const id=el.dataset.id;if(commit(()=>{const p=prodOf(id),ar=itemsOf(p,el.dataset.o);const it=ar.find(i=>i.id===el.dataset.i);if(!it||it.sold)throw new Error('ลบชิ้นที่ขายแล้วไม่ได้');ar.splice(ar.indexOf(it),1);syncStock(p)}))toast('ลบรายการสต๊อกแล้ว','ok');render();openStock(id,'',el.dataset.o)}),
  catNew:A(()=>openCategoryForm()),catEdit:A(el=>openCategoryForm(el.dataset.id)),
  catDelete:A(async el=>{const c=catOf(el.dataset.id);if(!c)return;const n=db.products.filter(p=>p.categoryId===c.id).length;if(n)return toast(`ลบไม่ได้: ยังมีสินค้า ${n} รายการในหมวดนี้ กรุณาย้ายหรือลบสินค้าก่อน`,'err');if(!await confirmBox(`ลบหมวดหมู่ "${c.name}" ?`,'ลบ',true))return;if(commit(()=>{db.categories=db.categories.filter(x=>x.id!==c.id)}))toast('ลบหมวดหมู่แล้ว','ok');render()}),
  catMove:A(el=>{moveItem('categories',el.dataset.id,+el.dataset.d);render()}),
@@ -822,15 +833,15 @@ document.addEventListener('change',async e=>{const el=e.target;
 
 /* ---------- Purchase ---------- */
 function buyModal(){const p=prodOf(ui.buy.pid);if(!p)return closeModal();const u=curUser();if(!u)return closeModal();me=u;
- const max=p.type==='stock'?p.stock:99;ui.buy.qty=Math.max(1,Math.min(max||1,ui.buy.qty));const q=ui.buy.qty,pr=priceFor(p,u),total=r2(pr.price*q),after=r2(u.balance-total),enough=after>=0;
- openModal(`<h3>ยืนยันการสั่งซื้อ</h3><div class="row" style="flex-wrap:nowrap"><img class="thumb" style="width:70px;height:70px" src="${imgOf(p)}" alt=""><div><b>${esc(p.name)}</b><br>${typeBadge(p.type)} ${p.type==='preorder'&&p.etaDate?`<small class="muted">คาดว่าเข้า ${fday(p.etaDate)}</small>`:`<small class="muted">คงเหลือ ${p.stock} ชิ้น</small>`}</div></div>
+ const opt=optOf(p,ui.buy.opt),max=p.type==='stock'?(opt?avail(opt):p.stock):99;ui.buy.qty=Math.max(1,Math.min(max||1,ui.buy.qty));const q=ui.buy.qty,pr=priceFor(p,u,opt),total=r2(pr.price*q),after=r2(u.balance-total),enough=after>=0;
+ openModal(`<h3>ยืนยันการสั่งซื้อ</h3><div class="row" style="flex-wrap:nowrap"><img class="thumb" style="width:70px;height:70px" src="${imgOf(p)}" alt=""><div><b>${esc(p.name)}${opt?' • '+esc(opt.name):''}</b><br>${typeBadge(p.type)} ${p.type==='preorder'&&p.etaDate?`<small class="muted">คาดว่าเข้า ${fday(p.etaDate)}</small>`:`<small class="muted">คงเหลือ ${max} ชิ้น</small>`}</div></div>
  <div class="qty" style="margin:14px 0"><span>จำนวน</span><button class="btn sm" data-act="buyQtyDelta" data-d="-1" ${q<=1?'disabled':''}>−</button><input type="number" min="1" max="${max}" value="${q}" data-change="buyQty"><button class="btn sm" data-act="buyQtyDelta" data-d="1" ${q>=max?'disabled':''}>＋</button></div>
  <table><tbody><tr><th>ราคาต่อหน่วย</th><td class="num">${money(pr.price)}${pr.kind!=='normal'?' '+badge(pr.kind==='agent'?'ราคาตัวแทน':'ราคาพิเศษ','sp'):''}</td></tr><tr><th>ยอดรวม</th><td class="num"><b style="font-size:1.2em;color:var(--primary)">${money(total)}</b></td></tr><tr><th>ยอดเงินในกระเป๋า</th><td class="num">${money(u.balance)}</td></tr><tr><th>คงเหลือหลังชำระ</th><td class="num ${enough?'':'neg'}">${enough?money(after):'ยอดเงินไม่เพียงพอ'}</td></tr></tbody></table>
  <div class="row end" style="margin-top:14px"><button class="btn" data-act="closeModal">ยกเลิก</button>${enough?`<button class="btn primary" data-act="doBuy">ยืนยันและชำระด้วยกระเป๋าเงิน</button>`:`<a class="btn primary" href="#/topup">ไปเติมเงิน</a>`}</div>`)}
 function purchase(){if(purchasing)return;purchasing=true;try{const u=curUser();if(!u){toast('กรุณาเข้าสู่ระบบ','err');return}const b=ui.buy;if(!b)return;
  let order=null;const ok=commit(()=>{const uu=userOf(u.id),p=prodOf(b.pid);if(!p||!p.active)throw new Error('สินค้านี้ไม่พร้อมจำหน่าย');if(!Number.isInteger(b.qty)||b.qty<1)throw new Error('จำนวนไม่ถูกต้อง');
-  const pr=priceFor(p,uu);if(uu.balance<r2(pr.price*b.qty))throw new Error('ยอดเงินในกระเป๋าไม่เพียงพอ กรุณาเติมเงิน');
-  order=createOrder(uu,p,b.qty);notify('order',`คำสั่งซื้อใหม่ ${order.no}: ${p.name} ×${b.qty} จาก ${uu.name}`,'admin');notify('payment',`ชำระเงิน ${money(order.total)} สำหรับ ${order.no} สำเร็จ`,uu.id);notify('payment',`ได้รับชำระ ${money(order.total)} จาก ${uu.name} (${order.no})`,'admin')});
+  const opt=optOf(p,b.opt);if(p.options&&p.options.length&&!opt)throw new Error('กรุณาเลือกตัวเลือกสินค้า');const pr=priceFor(p,uu,opt);if(uu.balance<r2(pr.price*b.qty))throw new Error('ยอดเงินในกระเป๋าไม่เพียงพอ กรุณาเติมเงิน');
+  order=createOrder(uu,p,b.qty,undefined,opt);notify('order',`คำสั่งซื้อใหม่ ${order.no}: ${order.name} ×${b.qty} จาก ${uu.name}`,'admin');notify('payment',`ชำระเงิน ${money(order.total)} สำหรับ ${order.no} สำเร็จ`,uu.id);notify('payment',`ได้รับชำระ ${money(order.total)} จาก ${uu.name} (${order.no})`,'admin')});
  if(ok){closeModal();ui.buy=null;toast(`สั่งซื้อสำเร็จ เลขที่ ${order.no}`,'ok');if(order.type==='stock'){render();receiptModal(order)}else nav('orders')}else{buyModal()}}finally{purchasing=false}}
 
 /* ---------- Slip verification (API) ---------- */
@@ -856,8 +867,8 @@ async function testApi(){const f=$('#apiform');if(!f)return;const url=f.url.valu
 
 /* ---------- Form handlers ---------- */
 const forms={
- stockEdit(f){const id=f.dataset.id,iid=f.dataset.i,l=parseItems(f.text.value);if(!l.length)return toast('กรุณากรอกข้อมูลสินค้า','err');if(commit(()=>{const p=prodOf(id);const k=p.items.findIndex(x=>x.id===iid);if(k<0||p.items[k].sold)throw new Error('แก้ไขชิ้นที่ขายแล้วไม่ได้');p.items[k].text=l[0];p.items.splice(k+1,0,...l.slice(1).map(t=>({id:uid(),text:t,sold:false,orderId:''})));syncStock(p)}))toast(l.length>1?'บันทึกแล้ว และแยกเพิ่มอีก '+(l.length-1)+' ชิ้น':'แก้ไขรายการสต๊อกแล้ว','ok');render();openStock(id)},
- stockAdd(f){const id=f.dataset.id,l=parseItems(f.text.value);if(!l.length)return toast('กรุณากรอกข้อมูลสินค้า','err');if(commit(()=>{const p=prodOf(id);l.forEach(t=>p.items.push({id:uid(),text:t,sold:false,orderId:''}));syncStock(p)}))toast('เพิ่มสต๊อก '+l.length+' ชิ้นแล้ว','ok');render();openStock(id)},
+ stockEdit(f){const id=f.dataset.id,iid=f.dataset.i,l=parseItems(f.text.value);if(!l.length)return toast('กรุณากรอกข้อมูลสินค้า','err');if(commit(()=>{const p=prodOf(id),ar=itemsOf(p,f.dataset.o);const k=ar.findIndex(x=>x.id===iid);if(k<0||ar[k].sold)throw new Error('แก้ไขชิ้นที่ขายแล้วไม่ได้');ar[k].text=l[0];ar.splice(k+1,0,...l.slice(1).map(t=>({id:uid(),text:t,sold:false,orderId:''})));syncStock(p)}))toast(l.length>1?'บันทึกแล้ว และแยกเพิ่มอีก '+(l.length-1)+' ชิ้น':'แก้ไขรายการสต๊อกแล้ว','ok');render();openStock(id,'',f.dataset.o)},
+ stockAdd(f){const id=f.dataset.id,l=parseItems(f.text.value);if(!l.length)return toast('กรุณากรอกข้อมูลสินค้า','err');if(commit(()=>{const p=prodOf(id),ar=itemsOf(p,f.dataset.o);l.forEach(t=>ar.push({id:uid(),text:t,sold:false,orderId:''}));syncStock(p)}))toast('เพิ่มสต๊อก '+l.length+' ชิ้นแล้ว','ok');render();openStock(id,'',f.dataset.o)},
  hsearch(f){ui.shop.q=f.q.value.trim();ui.shop.cat='';ui.shop.type='';f.reset();nav('products')},
  login(f){const email=f.email.value.trim().toLowerCase(),pw=f.password.value;const u=db.users.find(x=>x.email.toLowerCase()===email&&x.pass===pwHash(pw));
   if(!u)return toast('อีเมลหรือรหัสผ่านไม่ถูกต้อง','err');if(u.status!=='active')return toast('บัญชีนี้ถูกระงับการใช้งาน','err');
@@ -881,11 +892,14 @@ const forms={
   const x=db.topups.find(q=>q.id===id);
   if(x&&x.status==='approved')toast('เติมเงิน '+money(x.amount)+' สำเร็จ ยอดเงินถูกเพิ่มเข้ากระเป๋าแล้ว','ok');else if(x&&x.status==='rejected')toast('สลิปไม่ผ่านการตรวจสอบ: '+x.note,'err');else toast('ส่งสลิปแล้ว ยังตรวจสอบอัตโนมัติไม่ได้ ระบบจะเติมเงินให้เมื่อสลิปผ่านการตรวจสอบ','ok');
   render()},
- product(f){const id=f.dataset.id,name=f.name.value.trim(),type=f.type.value,price=parseFloat(f.price.value);if(!name)return toast('กรุณากรอกชื่อสินค้า','err');if(!(price>=0))return toast('ราคาไม่ถูกต้อง','err');
+ product(f){const id=f.dataset.id,name=f.name.value.trim(),type=f.type.value,price=parseFloat(f.price.value);if(!name)return toast('กรุณากรอกชื่อสินค้า','err');
+  const opts=[];for(const ln of (f.options.value||'').split('\n').map(x=>x.trim()).filter(Boolean)){const k=ln.lastIndexOf('|'),nm=(k>=0?ln.slice(0,k):ln).trim(),pv=parseFloat(k>=0?ln.slice(k+1):'');if(!nm||!(pv>=0))return toast('ตัวเลือก "'+ln+'" ไม่ถูกต้อง ใช้รูปแบบ ชื่อ | ราคา','err');if(opts.some(o=>o.name===nm))return toast('ชื่อตัวเลือกซ้ำ: '+nm,'err');opts.push({name:nm,price:pv})}
+  if(!opts.length&&!(price>=0))return toast('ราคาไม่ถูกต้อง','err');
   const ap=f.agentPrice.value.trim()===''?null:parseFloat(f.agentPrice.value);if(ap!==null&&!(ap>=0))return toast('ราคาตัวแทนไม่ถูกต้อง','err');
-  const lines=type==='stock'?parseItems(f.stockItems.value):null;
-  const data={name,categoryId:f.categoryId.value,type,price,agentPrice:ap,stock:0,etaDate:type==='preorder'?f.etaDate.value:'',etaNote:type==='preorder'?f.etaNote.value.trim():'',description:f.description.value.trim(),image:imgState.prod||'',active:f.active.checked};
+  const lines=type==='stock'&&!opts.length?parseItems(f.stockItems.value):null;
+  const data={name,categoryId:f.categoryId.value,type,price:opts.length?Math.min(...opts.map(o=>o.price)):price,agentPrice:ap,stock:0,etaDate:type==='preorder'?f.etaDate.value:'',etaNote:type==='preorder'?f.etaNote.value.trim():'',description:f.description.value.trim(),image:imgState.prod||'',active:f.active.checked};
   if(commit(()=>{let p;if(id){p=prodOf(id);Object.assign(p,data)}else{data.id=uid();data.items=[];data.createdAt=new Date().toISOString();data.order=db.products.reduce((m,x)=>Math.max(m,x.order||0),-1)+1;db.products.push(data);p=data}
+  if(opts.length||(p.options&&p.options.length)){const old=p.options||[],next=opts.map(o=>{const m=old.find(x=>x.name===o.name);return m?{...m,price:o.price}:{id:uid(),name:o.name,price:o.price,items:[]}});for(const m of old)if(!next.some(n=>n.id===m.id)&&(m.items||[]).some(i=>i.sold))throw new Error('ตัวเลือก "'+m.name+'" มีรายการที่ขายแล้ว ลบไม่ได้');p.options=next}
   if(lines){const sold=p.items.filter(i=>i.sold),pool=p.items.filter(i=>!i.sold),next=[];for(const t of lines){const k=pool.findIndex(i=>i.text===t);if(k>=0)next.push(pool.splice(k,1)[0]);else next.push({id:uid(),text:t,sold:false,orderId:''})}p.items=[...sold,...next]}else if(!Array.isArray(p.items))p.items=[];
   syncStock(p)})){closeModal();toast('บันทึกสินค้าแล้ว','ok');render()}},
  category(f){const id=f.dataset.id,name=f.name.value.trim();if(!name)return toast('กรุณากรอกชื่อหมวดหมู่','err');
