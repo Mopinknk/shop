@@ -84,7 +84,18 @@ td.num,th.num{text-align:right}
 .mob{display:none}
 .bellb{position:relative}
 .bellb i{position:absolute;top:-4px;right:-4px;background:var(--err);color:#fff;font-style:normal;font-size:.7em;min-width:18px;height:18px;border-radius:99px;display:grid;place-items:center;padding:0 4px}
-@media(max-width:860px){.mob{display:inline-flex}.nav{display:none;order:10;width:100%;flex-direction:column}.nav.open{display:flex}.hsearch{order:11;max-width:none;width:100%;flex-basis:100%;margin:0}.hact{margin-left:auto}}
+.blogo{width:34px;height:34px;border-radius:10px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;font-weight:700;font-size:.85em;flex:none}
+.navhead,.navbd{display:none}
+@keyframes navin{from{transform:translateX(-100%)}to{transform:none}}
+@media(max-width:860px){.mob{display:inline-flex}
+.nav{display:flex;position:fixed;left:0;top:0;bottom:0;width:270px;max-width:82vw;background:var(--surface);flex-direction:column;gap:2px;padding:16px;z-index:60;transform:translateX(-100%);visibility:hidden;overflow:auto}
+.nav.open{transform:none;visibility:visible;box-shadow:0 0 40px rgba(0,0,0,.3);animation:navin .2s ease-out}
+.nav a{border-radius:10px;padding:.65em .9em}
+.navhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
+.nav .brand,.nav .brand:hover{padding:0;background:none;color:var(--text)}
+.navbd{display:block;position:fixed;inset:0;background:rgba(10,12,20,.45);z-index:55;opacity:0;pointer-events:none}
+.navbd.open{opacity:1;pointer-events:auto}
+.hsearch{order:11;max-width:none;width:100%;flex-basis:100%;margin:0}.hact{margin-left:auto}}
 .hero{position:relative;border-radius:var(--radius);overflow:hidden;aspect-ratio:16/6;background:linear-gradient(120deg,var(--primary),var(--secondary));margin-bottom:28px}
 @media(max-width:600px){.hero{aspect-ratio:16/9}}
 .hero .slide{position:absolute;inset:0;opacity:0;transition:opacity .6s}
@@ -488,11 +499,13 @@ async function handlePick(el){const key=el.dataset.imgpick,file=el.files&&el.fil
    STOREFRONT VIEWS
    =================================================================== */
 function bellBtn(){const n=myNotifs().filter(x=>!x.read).length;return `<button class="btn sm ghost bellb" data-act="openBell" aria-label="แจ้งเตือน">${n?`<i>${n>99?'99+':n}</i>`:''}</button>`}
+const brandLogo=s=>s.logo?`<img src="${s.logo}" alt="">`:`<span class="blogo">${esc(Array.from(String(s.storeName||'M').trim().replace(/^[เแโใไ]/,''))[0]||'M').toUpperCase()}</span>`;
 function storeHeader(r){const s=db.settings,u=me;const L=(p,t)=>`<a href="#/${p}" class="${(r[0]||'')===p?'on':''}">${t}</a>`;
  return `<header class="sh"><div class="container hrow">
  <button class="btn ghost sm mob" data-act="toggleNav" aria-label="เมนู">☰</button>
- <a class="brand" href="#/">${s.logo?`<img src="${s.logo}" alt="">`:''}<b>${esc(s.storeName)}</b></a>
- <nav class="nav ${ui.nav?'open':''}">${L('','หน้าแรก')}${L('categories','หมวดหมู่')}${L('products','สินค้าทั้งหมด')}${u?L('orders','คำสั่งซื้อ'):''}${u?L('topup','เติมเงิน'):''}</nav>
+ <a class="brand" href="#/">${brandLogo(s)}<b>${esc(s.storeName)}</b></a>
+ <div class="navbd ${ui.nav?'open':''}" data-act="toggleNav"></div>
+ <nav class="nav ${ui.nav?'open':''}"><div class="navhead"><a class="brand" href="#/">${brandLogo(s)}<b>${esc(s.storeName)}</b></a><button class="btn ghost sm" data-act="toggleNav" aria-label="ปิดเมนู">✕</button></div>${L('','หน้าแรก')}${L('categories','หมวดหมู่')}${L('products','สินค้าทั้งหมด')}${u?L('orders','คำสั่งซื้อ'):''}${u?L('topup','เติมเงิน'):''}</nav>
  <form class="hsearch" data-form="hsearch"><input name="q" placeholder="ค้นหาสินค้า..." autocomplete="off"><button class="btn primary sm">ค้นหา</button></form>
  <div class="hact">${u?`${bellBtn()}<a class="chip" href="#/topup" title="ยอดเงินคงเหลือ">${money(u.balance)}</a><a class="btn sm" href="#/account">${esc(u.name)}</a>${u.role==='admin'?'<a class="btn sm secondary" href="#/admin">แดชบอร์ด</a>':''}<button class="btn sm ghost" data-act="logout">ออกจากระบบ</button>`:`<a class="btn sm" href="#/login">เข้าสู่ระบบ</a><a class="btn sm primary" href="#/register">สมัครสมาชิก</a>`}</div>
  </div></header>`}
