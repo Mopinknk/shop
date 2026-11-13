@@ -200,10 +200,12 @@ td.num,th.num{text-align:right}
 .hstats .card small{font-size:.5em;color:var(--text);font-weight:500}
 .hstats .card .ic{position:absolute;right:-6px;bottom:-12px;font-size:4.2em;opacity:.14}
 @media(max-width:700px){.shortcuts,.hstats{grid-template-columns:repeat(2,1fr)}}
-.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:18px}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.stats .card{padding:10px 14px}
 .stat{display:block}
-.stat .ic{font-size:1.5em}
-.stat b{display:block;font-size:1.5em;font-weight:var(--hw)}
+.stat .ic:empty{display:none}
+.stat{font-size:.88em}
+.stat b{display:block;font-size:1.2em;font-weight:var(--hw);margin-top:2px}
 a.stat:hover{border-color:var(--primary)}
 .chart{width:100%;height:auto}
 .pv{border:1px solid var(--line);border-radius:var(--radius);padding:12px;background:var(--bg);color:var(--text);font-family:var(--font),'Noto Sans Thai',system-ui,sans-serif;font-size:var(--fs)}
@@ -602,7 +604,7 @@ function adminLayout(sec){if(sec==='finance')sec='shopacc';const s=db.settings;c
  ${ADM.map(a=>`<a href="#/admin/${a[0]}" class="${a[0]===cur[0]?'on':''}">${a[1]} ${a[2]}</a>`).join('')}<hr style="border:0;border-top:1px solid var(--line)"><a href="#/">ดูหน้าร้าน</a></aside>
  <div class="amain"><div class="atop"><button class="btn ghost sm mob" data-act="toggleSide">☰</button><h2>${cur[1]} ${cur[2]}</h2><span class="grow"></span>${bellBtn()}<span class="muted">${esc(me.name)}</span><a class="btn sm" href="#/">หน้าร้าน</a><button class="btn sm ghost" data-act="logout">ออกจากระบบ</button></div><div class="abody">${body}</div></div></div>`}
 function niceMax(m){const p=Math.pow(10,Math.floor(Math.log10(m)));const f=m/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p}
-function barChart(data,color){const W=720,H=260,pl=52,pb=28,pt=12,pr=8,max=Math.max(1,...data.map(d=>d.value)),nm=niceMax(max),iw=W-pl-pr,ih=H-pt-pb,bw=iw/data.length,step=Math.ceil(data.length/10);
+function barChart(data,color){const W=960,H=230,pl=52,pb=28,pt=12,pr=8,max=Math.max(1,...data.map(d=>d.value)),nm=niceMax(max),iw=W-pl-pr,ih=H-pt-pb,bw=iw/data.length,step=Math.ceil(data.length/10);
  const sh=n=>n>=1000?(n/1000).toFixed(n%1000?1:0)+'k':String(Math.round(n));
  let s=`<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="กราฟ">`;
  for(let i=0;i<=4;i++){const y=pt+ih-ih*i/4;s+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${pl-6}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--muted)">${sh(nm*i/4)}</text>`}
@@ -610,7 +612,7 @@ function barChart(data,color){const W=720,H=260,pl=52,pb=28,pt=12,pr=8,max=Math.
  return s+'</svg>'}
 function aDashboard(){const members=db.users.filter(u=>u.role!=='admin'),agents=db.users.filter(u=>u.role==='agent'),valid=db.orders.filter(o=>o.status!=='cancelled');
  const pendT=db.topups.filter(t=>t.status==='pending'),pendO=db.orders.filter(o=>o.status==='pending'||o.status==='po_wait');
- const cards=[['','สมาชิกทั้งหมด',members.length,'members'],['','ตัวแทนจำหน่าย',agents.length,'members'],['','สินค้าทั้งหมด',db.products.length,'products'],['','คำสั่งซื้อทั้งหมด',db.orders.length,'orders'],['','ยอดขายรวม',money(sum(valid,'total')),'orders'],['','ยอดเติมเงินรวม',money(sum(db.topups.filter(t=>t.status==='approved'),'amount')),'finance'],['','เติมเงินรอตรวจสอบ',pendT.length,'finance'],['','คำสั่งซื้อรอดำเนินการ',pendO.length,'orders']];
+ const cards=[['','สมาชิกทั้งหมด',members.length,'members'],['','จำนวนสต๊อกทั้งหมด',sum(db.products.filter(p=>p.type==='stock'),'stock')+' ชิ้น','products'],['','คำสั่งซื้อทั้งหมด',db.orders.length,'orders'],['','ยอดขายรวม',money(sum(valid,'total')),'orders'],['','ยอดเติมเงินรวม',money(sum(db.topups.filter(t=>t.status==='approved'),'amount')),'finance'],['','คำสั่งซื้อรอดำเนินการ',pendO.length,'orders']];
  const n=ui.a.dayRange,days=[];for(let i=n-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(dayKey(d.toISOString()))}
  const m={};days.forEach(k=>m[k]=0);const src=ui.a.metric==='sales'?valid.map(o=>({at:o.createdAt,v:o.total})):db.topups.filter(t=>t.status==='approved').map(t=>({at:t.createdAt,v:t.amount}));
  src.forEach(x=>{const k=dayKey(x.at);if(k in m)m[k]+=x.v});
@@ -619,9 +621,9 @@ function aDashboard(){const members=db.users.filter(u=>u.role!=='admin'),agents=
  const today=valid.filter(o=>dayKey(o.createdAt)===dayKey(new Date().toISOString()));
  const periods=[['วันนี้',sum(today,'total'),today.length],['7 วันล่าสุด',...per(7)],['30 วันล่าสุด',...per(30)],['ทั้งหมด',sum(valid,'total'),valid.length]];
  const agg={};valid.forEach(o=>{const a=agg[o.productId]||(agg[o.productId]={name:o.name,qty:0,total:0});a.qty+=o.qty;a.total+=o.total});const top=Object.values(agg).sort((a,b)=>b.qty-a.qty).slice(0,6);
- return `<div class="stats">${cards.map(c=>`<a class="card stat" href="#/admin/${c[3]}"><span class="ic">${c[0]}</span><span class="muted">${c[1]}</span><b>${c[2]}</b></a>`).join('')}</div>
+ return `<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">${cards.map(c=>`<a class="card stat" href="#/admin/${c[3]}"><span class="ic">${c[0]}</span><span class="muted">${c[1]}</span><b>${c[2]}</b></a>`).join('')}</div>
  <div class="card"><div class="row between"><h3 style="margin:0">กราฟ${ui.a.metric==='sales'?'ยอดขาย':'ยอดเติมเงิน'}รายวัน</h3><div class="row"><div class="tabs" style="margin:0">${[['sales','ยอดขาย'],['topup','ยอดเติมเงิน']].map(t=>`<button class="${ui.a.metric===t[0]?'on':''}" data-act="dashSet" data-k="metric" data-v="${t[0]}">${t[1]}</button>`).join('')}</div><div class="tabs" style="margin:0">${[7,30,90].map(t=>`<button class="${ui.a.dayRange===t?'on':''}" data-act="dashSet" data-k="dayRange" data-v="${t}">${t} วัน</button>`).join('')}</div></div></div>${barChart(data,ui.a.metric==='sales'?'var(--primary)':'var(--secondary)')}<p class="muted">รวมในช่วงนี้: <b>${money(sum(data,'value'))}</b></p></div>
- <div class="stats" style="margin-top:18px">${periods.map(p=>`<div class="card"><span class="muted">ยอดขาย ${p[0]}</span><b style="display:block;font-size:1.4em">${money(p[1])}</b><small class="muted">${p[2]} คำสั่งซื้อ</small></div>`).join('')}</div>
+ <div class="stats" style="margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${periods.map(p=>`<div class="card stat"><span class="muted">ยอดขาย ${p[0]}</span><b style="display:block;font-size:1.15em">${money(p[1])}</b><small class="muted">${p[2]} คำสั่งซื้อ</small></div>`).join('')}</div>
  <div class="two"><div class="card"><h3>สินค้าขายดี</h3>${top.length?`<div class="tw"><table><thead><tr><th>สินค้า</th><th class="num">จำนวน</th><th class="num">ยอดขาย</th></tr></thead><tbody>${top.map(t=>`<tr><td>${esc(t.name)}</td><td class="num">${t.qty}</td><td class="num">${money(t.total)}</td></tr>`).join('')}</tbody></table></div>`:empty('ยังไม่มีข้อมูล')}</div>
  <div class="card"><div class="row between"><h3 style="margin:0">เติมเงินรอตรวจสอบ</h3><a class="btn sm" href="#/admin/finance">ไปตรวจสอบ</a></div>${pendT.length?`<div class="tw"><table><tbody>${pendT.slice(0,5).map(t=>`<tr><td>${esc(t.no)}<br><small class="muted">${esc(uname(t.userId))}</small></td><td class="num">${money(t.amount)}</td><td><button class="btn sm primary" data-act="topupReview" data-id="${t.id}">ตรวจสอบ</button></td></tr>`).join('')}</tbody></table></div>`:empty('ไม่มีรายการรอตรวจสอบ')}
  <h3 style="margin-top:16px">คำสั่งซื้อรอดำเนินการ</h3>${pendO.length?`<div class="tw"><table><tbody>${pendO.slice(0,5).map(o=>`<tr><td>${esc(o.no)}<br><small class="muted">${esc(o.name)}</small></td><td>${typeBadge(o.type)}</td><td><button class="btn sm" data-act="aOrderView" data-id="${o.id}">เปิด</button></td></tr>`).join('')}</tbody></table></div>`:empty('ไม่มีรายการ')}</div></div>`}
