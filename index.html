@@ -282,7 +282,13 @@ function ph(name){let h=0;for(const ch of String(name||'x'))h=(h*31+ch.charCodeA
 const imgOf=o=>(o&&o.image)||ph(o&&o.name);
 
 /* ---------- Persistence ---------- */
-function migrate(d){delete d.otp;d.ext=Object.assign({tg:{},dc:{},hook:{}},d.ext||{});['tg','dc','hook'].forEach(k=>{if(!d.ext[k]||typeof d.ext[k]!=='object')d.ext[k]={}});if(!Array.isArray(d.shortcuts))d.shortcuts=[];if(!Array.isArray(d.accounts))d.accounts=[];d.accounts.forEach(a=>{delete a.otpPin});if(!Array.isArray(d.templates))d.templates=[];
+let purged=false;
+function purgeDemo(d){ /* ล้างประวัติตัวอย่างครั้งเดียว: คำสั่งซื้อ เติมเงิน ธุรกรรม แจ้งเตือน */
+ if(d.demoPurged)return;d.demoPurged=true;purged=true;
+ d.orders=[];d.topups=[];d.tx=[];d.notifs=[];d.counters={order:0,topup:0};
+ (d.users||[]).forEach(u=>{u.balance=0});
+ (d.products||[]).forEach(p=>{if(Array.isArray(p.items)){p.items.forEach(i=>{i.sold=false;i.orderId=''});if(p.type==='stock')p.stock=p.items.length}})}
+function migrate(d){purgeDemo(d);delete d.otp;d.ext=Object.assign({tg:{},dc:{},hook:{}},d.ext||{});['tg','dc','hook'].forEach(k=>{if(!d.ext[k]||typeof d.ext[k]!=='object')d.ext[k]={}});if(!Array.isArray(d.shortcuts))d.shortcuts=[];if(!Array.isArray(d.accounts))d.accounts=[];d.accounts.forEach(a=>{delete a.otpPin});if(!Array.isArray(d.templates))d.templates=[];
  if(!d.tplSeeded){d.tplSeeded=true;if(!d.templates.length)d.templates=[{id:uid(),name:'Netflix / บัญชีจอ',body:'{บริการ}\nMAIL : {อีเมล}\nPASS : {รหัสผ่าน}\nSCREEN : {จอ}\nPIN : {PIN}\nEXP : {วันหมดอายุ}'},{id:uid(),name:'แบบทั่วไป (ไทย)',body:'📌 {บริการ}\nอีเมล: {อีเมล}\nรหัสผ่าน: {รหัสผ่าน}\nโปรไฟล์/จอ: {จอ} (PIN {PIN})\nหมดอายุ: {วันหมดอายุ}'}]}
  if(!d.shortcutsSeeded){d.shortcutsSeeded=true;if(!d.shortcuts.length)d.shortcuts=[['สินค้าทั้งหมด','#/products'],['เติมเงิน','#/topup'],['หมวดหมู่สินค้า','#/categories'],['คำสั่งซื้อของฉัน','#/orders']].map((x,i)=>({id:uid(),title:x[0],url:x[1],image:'',active:true,order:i}));d.settings=d.settings||{};if(!d.settings.announce)d.settings.announce='ยินดีต้อนรับ — เว็บไซต์พร้อมให้บริการ กดสั่งซื้อได้ตลอด 24 ชม.'}(d.orders||[]).forEach(o=>{if(o.type==='stock'&&o.status!=='done'&&o.status!=='cancelled'){o.status='done';(o.history=o.history||[]).push({status:'done',at:new Date().toISOString()})}});(d.products||[]).forEach(p=>{if(!Array.isArray(p.options))p.options=[];if(!Array.isArray(p.items)){p.items=[];if(p.type==='stock')for(let i=1;i<=(+p.stock||0);i++)p.items.push({id:uid(),text:p.name+' #'+String(i).padStart(3,'0'),sold:false,orderId:''})}});return d}
 function load(){try{const raw=localStorage.getItem(LS);if(raw){const d=JSON.parse(raw);if(d&&d.v===1)return migrate(d)}}catch(e){}
@@ -303,7 +309,7 @@ const sb={t:null,pushing:false,dirty:false,ver:null,ok:null,
   finally{this.pushing=false;if(this.dirty)this.sched()}},
  sched(){clearTimeout(this.t);this.t=setTimeout(()=>this.push(),700)},
  async boot(){try{const row=await this.pull();
-   if(row&&row.data&&row.data.v===1){db=migrate(row.data);this.ver=row.updated_at;try{localStorage.setItem(LS,JSON.stringify(db))}catch(e){}this.ok=true;render()}
+   if(row&&row.data&&row.data.v===1){db=migrate(row.data);this.ver=row.updated_at;try{localStorage.setItem(LS,JSON.stringify(db))}catch(e){}this.ok=true;render();if(purged)await this.push()}
    else{this.ok=true;await this.push()} /* ยังไม่มีข้อมูลบน Supabase → อัปโหลดข้อมูลปัจจุบันขึ้นไป */}
   catch(e){console.error(e);this.ok=false;toast('เชื่อม Supabase ไม่ได้ ใช้ข้อมูลในเครื่องแทน: '+(e.message||e),'err')}}};
 function save(){try{localStorage.setItem(LS,JSON.stringify(db));sb.sched();return true}catch(e){toast('บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์เต็ม ลองลบรูปที่ไม่ใช้ออก','err');return false}}
@@ -1038,7 +1044,7 @@ document.addEventListener('submit',async e=>{const f=e.target.closest('form[data
  try{await h(f)}catch(err){console.error(err);toast('เกิดข้อผิดพลาด: '+(err.message||err),'err')}});
 
 /* ---------- Init ---------- */
-db=load();
+db=load();if(purged)save();
 render();
 sb.boot();
 document.addEventListener('visibilitychange',async()=>{if(document.hidden||sb.pushing||sb.dirty||sb.t&&sb.ok===null)return;try{const row=await sb.pull();if(row&&row.updated_at&&row.updated_at!==sb.ver&&row.data&&row.data.v===1&&!$('#modalRoot').innerHTML.trim()){db=migrate(row.data);sb.ver=row.updated_at;try{localStorage.setItem(LS,JSON.stringify(db))}catch(e){}render()}}catch(e){}});
