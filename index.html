@@ -225,8 +225,8 @@ a.stat:hover{border-color:var(--primary)}
 <script>
 'use strict';
 /* =====================================================================
-   MyShop — ระบบร้านค้าออนไลน์ (ไฟล์เดียว) — ใช้ localStorage เป็นฐานข้อมูลจำลอง
-   ยังไม่เชื่อม Supabase / ใช้ข้อมูลตัวอย่าง
+   MyShop — ระบบร้านค้าออนไลน์ (ไฟล์เดียว) — เก็บข้อมูลใน Supabase (table shop_state)
+   และสำรองไว้ใน localStorage ของเบราว์เซอร์ (ใช้ต่อได้เมื่อออฟไลน์)
    ===================================================================== */
 
 /* ---------- Utilities ---------- */
@@ -252,6 +252,10 @@ let seedR=11;const rnd=()=>(seedR=(seedR*16807)%2147483647)/2147483647;
 
 /* ---------- Constants ---------- */
 const LS='myshop_demo_db_v1',SES='myshop_demo_session_v1';
+/* ---------- Supabase config ---------- */
+const SB_URL='https://kxqebjihpltfrnqtptmv.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4cWViamlocGx0ZnJucXRwdG12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1NDMyODQsImV4cCI6MjExMDExOTI4NH0.znwwUl2q9ToN54lTRIP-v27E2NVntYIGvJsdcuyz2Xc'; // anon key (เปิดเผยฝั่งเบราว์เซอร์ได้ แต่ต้องตั้ง RLS)
+const SB_ROW='ab9be4d0-fcd6-48bb-af1a-efb68a9ee68a'; // id ของแถวที่เก็บข้อมูลร้านนี้
 const THEME_DEFAULT={storeName:'MyShop',logo:'',primary:'#6d5efc',secondary:'#ff7a59',bg:'#f6f7fb',surface:'#ffffff',text:'#1f2430',font:'Prompt',fontSize:16,headWeight:700,announce:''};
 const FONTS=['Prompt','Kanit','Sarabun','Noto Sans Thai','Mitr','Athiti','ระบบ (System)'];
 const BANKS=['กสิกรไทย (KBANK)','ไทยพาณิชย์ (SCB)','กรุงเทพ (BBL)','กรุงไทย (KTB)','กรุงศรีอยุธยา (BAY)','ทหารไทยธนชาต (ttb)','ออมสิน (GSB)','ธ.ก.ส. (BAAC)','พร้อมเพย์ (PromptPay)'];
@@ -283,7 +287,26 @@ function migrate(d){delete d.otp;d.ext=Object.assign({tg:{},dc:{},hook:{}},d.ext
  if(!d.shortcutsSeeded){d.shortcutsSeeded=true;if(!d.shortcuts.length)d.shortcuts=[['สินค้าทั้งหมด','#/products'],['เติมเงิน','#/topup'],['หมวดหมู่สินค้า','#/categories'],['คำสั่งซื้อของฉัน','#/orders']].map((x,i)=>({id:uid(),title:x[0],url:x[1],image:'',active:true,order:i}));d.settings=d.settings||{};if(!d.settings.announce)d.settings.announce='ยินดีต้อนรับ — เว็บไซต์พร้อมให้บริการ กดสั่งซื้อได้ตลอด 24 ชม.'}(d.orders||[]).forEach(o=>{if(o.type==='stock'&&o.status!=='done'&&o.status!=='cancelled'){o.status='done';(o.history=o.history||[]).push({status:'done',at:new Date().toISOString()})}});(d.products||[]).forEach(p=>{if(!Array.isArray(p.options))p.options=[];if(!Array.isArray(p.items)){p.items=[];if(p.type==='stock')for(let i=1;i<=(+p.stock||0);i++)p.items.push({id:uid(),text:p.name+' #'+String(i).padStart(3,'0'),sold:false,orderId:''})}});return d}
 function load(){try{const raw=localStorage.getItem(LS);if(raw){const d=JSON.parse(raw);if(d&&d.v===1)return migrate(d)}}catch(e){}
  const d=migrate(seed());try{localStorage.setItem(LS,JSON.stringify(d))}catch(e){}return d}
-function save(){try{localStorage.setItem(LS,JSON.stringify(db));return true}catch(e){toast('บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์เต็ม ลองลบรูปที่ไม่ใช้ออก','err');return false}}
+/* ---------- Supabase sync (REST, ไม่ต้องใช้ไลบรารี) ---------- */
+const sb={t:null,pushing:false,dirty:false,ver:null,ok:null,
+ h(extra){return Object.assign({apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},extra||{})},
+ url:'/rest/v1/shop_state',
+ async pull(){const r=await fetch(SB_URL+this.url+'?id=eq.'+SB_ROW+'&select=data,updated_at',{headers:this.h()});
+  if(!r.ok)throw new Error('Supabase '+r.status+' '+(await r.text().catch(()=>'')).slice(0,120));
+  const j=await r.json();return j[0]||null},
+ async push(){if(this.pushing){this.dirty=true;return}this.pushing=true;this.dirty=false;
+  try{const body=JSON.stringify({id:SB_ROW,data:db,updated_at:new Date().toISOString()});
+   const r=await fetch(SB_URL+this.url+'?on_conflict=id',{method:'POST',headers:this.h({Prefer:'resolution=merge-duplicates,return=minimal'}),body});
+   if(!r.ok)throw new Error('Supabase '+r.status+' '+(await r.text().catch(()=>'')).slice(0,120));
+   this.ver=JSON.parse(body).updated_at;if(this.ok===false)toast('เชื่อม Supabase สำเร็จแล้ว','ok');this.ok=true}
+  catch(e){console.error(e);if(this.ok!==false)toast('บันทึกขึ้น Supabase ไม่สำเร็จ (เก็บในเครื่องไว้ก่อน): '+(e.message||e),'err');this.ok=false}
+  finally{this.pushing=false;if(this.dirty)this.sched()}},
+ sched(){clearTimeout(this.t);this.t=setTimeout(()=>this.push(),700)},
+ async boot(){try{const row=await this.pull();
+   if(row&&row.data&&row.data.v===1){db=migrate(row.data);this.ver=row.updated_at;try{localStorage.setItem(LS,JSON.stringify(db))}catch(e){}this.ok=true;render()}
+   else{this.ok=true;await this.push()} /* ยังไม่มีข้อมูลบน Supabase → อัปโหลดข้อมูลปัจจุบันขึ้นไป */}
+  catch(e){console.error(e);this.ok=false;toast('เชื่อม Supabase ไม่ได้ ใช้ข้อมูลในเครื่องแทน: '+(e.message||e),'err')}}};
+function save(){try{localStorage.setItem(LS,JSON.stringify(db));sb.sched();return true}catch(e){toast('บันทึกไม่สำเร็จ: พื้นที่จัดเก็บของเบราว์เซอร์เต็ม ลองลบรูปที่ไม่ใช้ออก','err');return false}}
 function commit(fn){const snap=JSON.stringify(db);try{fn()}catch(e){db=JSON.parse(snap);toast(e.message||'เกิดข้อผิดพลาด','err');return false}
  if(!save()){db=JSON.parse(snap);return false}return true}
 
@@ -1020,6 +1043,8 @@ document.addEventListener('submit',async e=>{const f=e.target.closest('form[data
 /* ---------- Init ---------- */
 db=load();
 render();
+sb.boot();
+document.addEventListener('visibilitychange',async()=>{if(document.hidden||sb.pushing||sb.dirty||sb.t&&sb.ok===null)return;try{const row=await sb.pull();if(row&&row.updated_at&&row.updated_at!==sb.ver&&row.data&&row.data.v===1&&!$('#modalRoot').innerHTML.trim()){db=migrate(row.data);sb.ver=row.updated_at;try{localStorage.setItem(LS,JSON.stringify(db))}catch(e){}render()}}catch(e){}});
 </script>
 </body>
 </html>
